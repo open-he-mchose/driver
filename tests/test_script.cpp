@@ -110,6 +110,7 @@ TEST(script_limits_and_errors)
     CHECK_EQ(printed[0], std::string("hello\t42"));
 }
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -148,4 +149,37 @@ TEST(script_examples_run)
         ++n;
     }
     CHECK(n >= 6);
+}
+
+// typing_speed.lua: 60 WPM on a 120 WPM scale lights the left half of the top row.
+TEST(script_typing_speed_bar)
+{
+    std::ifstream f(std::string(MCHOSE_SCRIPT_EXAMPLES) + "/typing_speed.lua");
+    std::stringstream ss;
+    ss << f.rdbuf();
+    std::vector<KeyInfo> keys;
+    for (int i = 0; i < 14; ++i)
+        keys.push_back({i, "F" + std::to_string(i), static_cast<float>(i), 0, 1});   // top row
+    for (int i = 14; i < 30; ++i)
+        keys.push_back({i, "K" + std::to_string(i), static_cast<float>(i - 14), 2, 1});
+    LightingScript s(keys, 128, 16, 6);
+    s.load(ss.str(), "typing_speed.lua");
+    s.set_param("smoothing", 0);
+    s.set_param("peak", 0);
+    std::vector<Rgb> c;
+    for (int frame = 0; frame <= 100; ++frame) {   // 4 s at 25 fps, a key every 5th frame = 5 presses/s
+        FrameInput in;
+        in.t = frame / 25.0;
+        in.dt = 1 / 25.0;
+        if (frame % 5 == 0)
+            in.pressed = {20};
+        c = s.frame(in);
+    }
+    auto bright = [&](int i) { return std::max<int>({c[i][0], c[i][1], c[i][2]}); };
+    CHECK(bright(0) > 200);    // left end lit (green)
+    CHECK(c[0][1] > c[0][0]);  // green dominates at the start
+    CHECK(bright(5) > 200);
+    CHECK(bright(9) < 60);     // right part dim
+    CHECK(bright(13) < 60);
+    CHECK(bright(20) < 60);    // rest of the keyboard dim (background mode 1)
 }
