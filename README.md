@@ -13,8 +13,11 @@ at <https://open-he-mchose.github.io/>; the firmware is not modified.
 | `hid/` | transport through [hidapi](https://github.com/libusb/hidapi) | hidapi |
 | `cli/` | `mchosectl` | core, hid |
 | `tests/` | unit tests with a simulated keyboard; golden values from the documentation | core |
+| `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, Qt 6.5+ |
 
-A Qt GUI will follow in `gui/` (GPL-3.0); `core`, `hid` and `cli` stay MIT.
+`gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0, early): visual keyboard, actuation and rapid trigger,
+remapping, lighting, live key depth, backup / restore. Build it with `-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with
+Qt Quick and Quick Controls 2). `core`, `hid` and `cli` stay MIT.
 
 ## Supported keyboards
 

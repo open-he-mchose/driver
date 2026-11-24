@@ -1,0 +1,293 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "worker.hpp"
+
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QStandardPaths>
+
+#include <cmath>
+#include <cstdio>
+
+#include "mchose/glw/backup_file.hpp"
+
+using namespace mchose;
+using namespace mchose::glw;
+
+namespace {
+
+QString hex_color(std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+    char buf[8];
+    std::snprintf(buf, sizeof buf, "#%02x%02x%02x", r, g, b);
+    return QString::fromLatin1(buf);
+}
+
+std::array<std::uint8_t, 3> parse_color(const QString& s)
+{
+    QString h = s.startsWith('#') ? s.mid(1) : s;
+    bool ok = false;
+    const uint v = h.toUInt(&ok, 16);
+    if (!ok || h.size() != 6)
+        throw std::runtime_error("colour must be #rrggbb");
+    return {static_cast<std::uint8_t>(v >> 16), static_cast<std::uint8_t>(v >> 8), static_cast<std::uint8_t>(v)};
+}
+
+}  // namespace
+
+Worker::Worker()
+{
+    streamTimer_ = new QTimer(this);
+    streamTimer_->setInterval(5);
+    connect(streamTimer_, &QTimer::timeout, this, &Worker::pollStream);
+}
+
+Worker::~Worker()
+{
+    if (kb_ && streamTimer_->isActive()) {
+        try {
+            kb_->set_depth_stream(false);
+        } catch (...) {
+        }
+    }
+}
+
+bool Worker::ready()
+{
+    if (kb_)
+        return true;
+    emit message(tr("No keyboard connected"), true);
+    return false;
+}
+
+template <class F>
+void Worker::run(const QString& what, F&& f, bool reread)
+{
+    if (!ready())
+        return;
+    emit busyChanged(true);
+    try {
+        f();
+        if (!what.isEmpty())
+            emit message(what, false);
+        if (reread)
+            refresh();
+    } catch (const SafetyError& e) {
+        emit message(tr("Refused: %1").arg(QString::fromStdString(e.what())), true);
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+    }
+    emit busyChanged(false);
+}
+
+void Worker::connectDevice()
+{
+    emit busyChanged(true);
+    try {
+        streamTimer_->stop();
+        kb_.reset();
+        transport_.reset();
+        auto devs = hid::enumerate();
+        const hid::DeviceInfo* chosen = nullptr;
+        for (const auto& d : devs)
+            if (d.model && !chosen)
+                chosen = &d;
+        if (!chosen) {
+            emit connectedChanged(false, {});
+            emit message(devs.empty() ? tr("No MCHOSE keyboard found") : tr("This MCHOSE keyboard is not supported yet"), true);
+            emit busyChanged(false);
+            return;
+        }
+        transport_ = std::make_unique<hid::HidapiTransport>(chosen->path);
+        kb_ = std::make_unique<Keyboard>(*transport_, *chosen->model);
+        factoryIndex_.clear();
+        auto factory = kb_->factory_keymap(0);
+        for (int i = 0; i < kb_->model().keys; ++i)
+            factoryIndex_[factory[static_cast<std::size_t>(i)].bytes()] = i;
+        backedUp_ = false;
+        emit connectedChanged(true, QString::fromStdString(chosen->model->name));
+        refresh();
+    } catch (const std::exception& e) {
+        kb_.reset();
+        transport_.reset();
+        emit connectedChanged(false, {});
+        emit message(QString::fromStdString(e.what()), true);
+    }
+    emit busyChanged(false);
+}
+
+void Worker::refresh()
+{
+    if (!kb_)
+        return;
+    try {
+        Snapshot s;
+        const Model& m = kb_->model();
+        s.model = QString::fromStdString(m.name);
+        auto fi = kb_->info();
+        s.firmware = QString::fromStdString(fi.version_string() + " (" + fi.build + ")");
+        auto b = kb_->base_info();
+        s.activeProfile = b.runtime_profile();
+        for (int i = 0; i < b.length() && i < 4; ++i)
+            s.rotation.push_back(b.order(i));
+        auto fc = kb_->funcconfig(s.activeProfile);
+        s.reportRateHz = report_rate_hz(fc.report_rate()).value_or(0);
+        s.lightEffect = fc.light_effect();
+        s.lightBrightness = fc.light_brightness();
+        s.lightSpeed = fc.light_speed();
+        auto c = fc.light_color();
+        s.lightColor = hex_color(c[0], c[1], c[2]);
+        auto km = kb_->keymap(s.activeProfile, 0);
+        auto tr = kb_->triggers(s.activeProfile);
+        auto colors = kb_->colors(s.activeProfile);
+        const double unit = m.distance_unit_um / 1000.0;
+        for (int i = 0; i < m.keys; ++i) {
+            const auto k = static_cast<std::size_t>(i);
+            Snapshot::Key key;
+            key.mapping = QString::fromStdString(to_string(km[k]));
+            key.actuation = tr[k].actuation() * unit;
+            key.rtPress = tr[k].rt_press() * unit;
+            key.rtRelease = tr[k].rt_release() * unit;
+            key.mode = static_cast<int>(tr[k].mode());
+            key.color = hex_color(colors[k][0], colors[k][1], colors[k][2]);
+            s.keys.push_back(key);
+        }
+        emit refreshed(s);
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+    }
+}
+
+void Worker::autoBackup()
+{
+    if (backedUp_)
+        return;
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/backups";
+    QDir().mkpath(dir);
+    const QString file = dir + "/backup-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".json";
+    auto img = kb_->backup();
+    QFile f(file);
+    if (!f.open(QIODevice::WriteOnly))
+        throw std::runtime_error("cannot write the automatic backup " + file.toStdString());
+    f.write(QByteArray::fromStdString(backup_to_json(img, QDateTime::currentDateTime().toString(Qt::ISODate).toStdString())));
+    backedUp_ = true;
+    emit message(tr("Backup saved before the first change: %1").arg(file), false);
+}
+
+void Worker::switchProfile(int profile)
+{
+    run(tr("Profile %1 active").arg(profile), [&] {
+        WriteOptions o;
+        o.allow_outside_rotation = true;   // the profile list in the UI shows all four
+        kb_->switch_profile(profile, o);
+    });
+}
+
+void Worker::applyTrigger(QVector<int> keys, double actuation, int mode, double press, double release)
+{
+    run(tr("Trigger settings written for %n key(s)", nullptr, static_cast<int>(keys.size())), [&] {
+        autoBackup();
+        const int p = kb_->active_profile();
+        auto tr = kb_->triggers(p);
+        const double per_mm = 1000.0 / kb_->model().distance_unit_um;
+        for (int k : keys) {
+            TriggerEntry e = tr[static_cast<std::size_t>(k)];
+            e.set_actuation(static_cast<int>(std::lround(actuation * per_mm)));
+            e.set_mode(static_cast<TriggerEntry::Mode>(mode));
+            e.set_rt_press(static_cast<int>(std::lround(press * per_mm)));
+            e.set_rt_release(static_cast<int>(std::lround(release * per_mm)));
+            if (e.raw != tr[static_cast<std::size_t>(k)].raw)
+                kb_->set_trigger(p, k, e);
+        }
+    });
+}
+
+void Worker::remap(int key, QString code)
+{
+    run(tr("Key remapped"), [&] {
+        auto c = parse_keycode(code.toStdString());
+        if (!c)
+            throw std::runtime_error("unknown key code '" + code.toStdString() + "'");
+        autoBackup();
+        kb_->set_key(kb_->active_profile(), 0, key, *c);
+    });
+}
+
+void Worker::applyLight(int effect, int brightness, int speed, QString color)
+{
+    run(tr("Lighting written"), [&] {
+        autoBackup();
+        const int p = kb_->active_profile();
+        FuncConfig fc = kb_->funcconfig(p);
+        fc.set_light_effect(static_cast<std::uint8_t>(effect));
+        fc.set_light_brightness(static_cast<std::uint8_t>(brightness));
+        fc.set_light_speed(static_cast<std::uint8_t>(speed));
+        auto c = parse_color(color);
+        fc.set_light_color(c[0], c[1], c[2]);
+        kb_->set_funcconfig(p, fc);
+    });
+}
+
+void Worker::backup(QString path)
+{
+    run(tr("Backup saved: %1").arg(path), [&] {
+        auto img = kb_->backup();
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly))
+            throw std::runtime_error("cannot write " + path.toStdString());
+        f.write(QByteArray::fromStdString(backup_to_json(img, QDateTime::currentDateTime().toString(Qt::ISODate).toStdString())));
+    }, false);
+}
+
+void Worker::restore(QString path)
+{
+    int writes = 0;
+    run({}, [&] {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly))
+            throw std::runtime_error("cannot read " + path.toStdString());
+        auto img = backup_from_json(f.readAll().toStdString());
+        autoBackup();
+        writes = kb_->restore(img);
+        emit message(writes ? tr("Restored (%1 writes)").arg(writes) : tr("The keyboard already matches the backup"), false);
+    });
+}
+
+void Worker::setStreaming(bool on)
+{
+    if (!ready())
+        return;
+    try {
+        kb_->set_depth_stream(on);
+        if (on)
+            streamTimer_->start();
+        else
+            streamTimer_->stop();
+        emit streamingChanged(on);
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+    }
+}
+
+void Worker::pollStream()
+{
+    if (!kb_)
+        return;
+    try {
+        // Drain what arrived; no requests are sent while streaming.
+        for (int n = 0; n < 32; ++n) {
+            auto rep = kb_->session().transport().read(std::chrono::milliseconds(0));
+            if (!rep)
+                break;
+            if (auto s = parse_depth_sample(*rep)) {
+                auto it = factoryIndex_.find(s->key.bytes());
+                if (it != factoryIndex_.end())
+                    emit depth(it->second, s->travel / 100.0, s->pressed);
+            }
+        }
+    } catch (const std::exception& e) {
+        streamTimer_->stop();
+        emit streamingChanged(false);
+        emit message(QString::fromStdString(e.what()), true);
+    }
+}

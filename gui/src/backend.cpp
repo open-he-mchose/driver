@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "backend.hpp"
+
+#include "mchose/model.hpp"
+
+Backend::Backend(QObject* parent) : QObject(parent)
+{
+    qRegisterMetaType<Snapshot>();
+    qRegisterMetaType<QVector<int>>();
+    if (auto m = mchose::find_model(mchose::kMchoseVid, 0x211A))
+        keys_.setLayout(m->layout);
+
+    worker_ = new Worker;
+    worker_->moveToThread(&thread_);
+    connect(&thread_, &QThread::finished, worker_, &QObject::deleteLater);
+
+    connect(this, &Backend::doConnect, worker_, &Worker::connectDevice);
+    connect(this, &Backend::doRefresh, worker_, &Worker::refresh);
+    connect(this, &Backend::doSwitch, worker_, &Worker::switchProfile);
+    connect(this, &Backend::doTrigger, worker_, &Worker::applyTrigger);
+    connect(this, &Backend::doRemap, worker_, &Worker::remap);
+    connect(this, &Backend::doLight, worker_, &Worker::applyLight);
+    connect(this, &Backend::doBackup, worker_, &Worker::backup);
+    connect(this, &Backend::doRestore, worker_, &Worker::restore);
+    connect(this, &Backend::doStreaming, worker_, &Worker::setStreaming);
+
+    connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
+        connected_ = on;
+        emit connectedChanged();
+    });
+    connect(worker_, &Worker::refreshed, this, [this](const Snapshot& s) {
+        snap_ = s;
+        keys_.setSnapshot(s);
+        emit snapshotChanged();
+    });
+    connect(worker_, &Worker::busyChanged, this, [this](bool b) {
+        busy_ = b;
+        emit busyChanged();
+    });
+    connect(worker_, &Worker::streamingChanged, this, [this](bool on) {
+        streaming_ = on;
+        if (!on)
+            keys_.clearDepth();
+        emit streamingChanged();
+    });
+    connect(worker_, &Worker::depth, this, [this](int key, double mm, bool pressed) { keys_.setDepth(key, mm, pressed); });
+    connect(worker_, &Worker::message, this, &Backend::message);
+
+    thread_.start();
+    emit doConnect();
+}
+
+Backend::~Backend()
+{
+    if (streaming_)
+        QMetaObject::invokeMethod(worker_, "setStreaming", Qt::BlockingQueuedConnection, Q_ARG(bool, false));
+    thread_.quit();
+    thread_.wait();
+}
+
+QVariantList Backend::rotation() const
+{
+    QVariantList l;
+    for (int p : snap_.rotation)
+        l.push_back(p);
+    return l;
+}
+
+QStringList Backend::effectNames() const
+{
+    return {"static (per-key colours)", "aurora mapping", "shadow steps", "tranquility", "pulsation", "flower dance",
+            "tidal rhythm", "surging tide", "colorful fountain", "galaxy roaming", "spiral", "surge rhythm", "ocean",
+            "ripple dance", "ripple", "instant flash", "matrix shadows", "melody piano", "flow dance", "raining", "stars",
+            "fireworks", "ripple flow"};
+}
+
+void Backend::connectDevice() { emit doConnect(); }
+void Backend::refresh() { emit doRefresh(); }
+void Backend::switchProfile(int profile) { emit doSwitch(profile); }
+
+void Backend::applyTrigger(double actuation, int mode, double press, double release)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select keys first"), true);
+        return;
+    }
+    emit doTrigger(sel, actuation, mode, press, release);
+}
+
+void Backend::remapSelected(const QString& code)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.size() != 1) {
+        emit message(tr("Select exactly one key to remap"), true);
+        return;
+    }
+    emit doRemap(sel.first(), code);
+}
+
+void Backend::applyLight(int effect, int brightness, int speed, const QString& color)
+{
+    emit doLight(effect, brightness, speed, color);
+}
+
+void Backend::backup(const QUrl& file) { emit doBackup(file.toLocalFile()); }
+void Backend::restore(const QUrl& file) { emit doRestore(file.toLocalFile()); }
+void Backend::setStreaming(bool on) { emit doStreaming(on); }

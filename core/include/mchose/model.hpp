@@ -12,6 +12,13 @@ namespace mchose {
 
 enum class Protocol { Glw, Qhw };
 
+// One key of the physical layout, in key units (1 u = one standard key), origin top-left.
+struct KeyCap {
+    int index;           // matrix index
+    const char* label;
+    float x, y, w;
+};
+
 struct Model {
     std::string name;            // "Jet75-II"
     std::uint16_t vid = 0;
@@ -24,6 +31,7 @@ struct Model {
     int macro_area = 8192;       // bytes, shared by all profiles
     int distance_unit_um = 10;   // trigger distances: 1 unit = 10 um = 0.01 mm
     bool verified = false;       // tested on real hardware
+    std::span<const KeyCap> layout;   // physical layout (empty if unknown)
 
     int keymap_offset(int profile, int layer, int key = 0) const { return 512 * (layers * profile + layer) + 3 * key; }
     int trigger_offset(int profile, int key = 0) const { return 1024 * profile + 8 * key; }

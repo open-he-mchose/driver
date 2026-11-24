@@ -506,3 +506,18 @@ TEST(restore_coalesces_adjacent_entries)
     CHECK(k.keymap(1, 0)[39] == (KeyCode{0xF0, 0xF0, 0x29}));   // only the usage byte was changed
     CHECK_EQ(k.restore(img), 0);
 }
+
+TEST(jet75_layout_covers_every_key_once)
+{
+    auto m = *find_model(0x41E4, 0x211A);
+    CHECK_EQ(m.layout.size(), std::size_t(80));
+    std::vector<int> seen(80, 0);
+    for (const auto& k : m.layout) {
+        CHECK(k.index >= 0 && k.index < 80);
+        if (k.index >= 0 && k.index < 80)
+            ++seen[static_cast<std::size_t>(k.index)];
+        CHECK(k.x >= 0 && k.x + k.w <= 16.01f);
+    }
+    for (int s : seen)
+        CHECK_EQ(s, 1);
+}

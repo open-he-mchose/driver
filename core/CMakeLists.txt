@@ -9,6 +9,8 @@ add_library(mchose_core
   src/macro_text.cpp
   src/model.cpp
   src/keyboard.cpp
+  src/backup_file.cpp
+  src/json.cpp
   src/keyboard_adv.cpp
   src/advanced.cpp
 )
