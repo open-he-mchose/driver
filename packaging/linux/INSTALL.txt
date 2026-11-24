@@ -1,0 +1,18 @@
+mchosectl for Linux (x86_64)
+
+1. Allow your user to access the keyboard (once):
+
+     sudo cp 70-mchose-hidraw.rules /etc/udev/rules.d/
+     sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=hidraw
+
+   (or install https://github.com/open-he-mchose/linux-fixes, which includes this rule and also fixes
+   Snap Tap, macros and more than 6 simultaneous keys)
+
+2. Run it:
+
+     ./mchosectl info
+
+   Optionally copy it to a directory in your PATH:  sudo install -m755 mchosectl /usr/local/bin/
+
+Requirements: glibc 2.35 or newer, libudev (part of every systemd / eudev system).
+Close the official web driver while using mchosectl.

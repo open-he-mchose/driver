@@ -32,7 +32,7 @@ namespace {
 
 const char* kUsage = R"(mchosectl — configure MCHOSE magnetic keyboards (unofficial; Jet75-II tested)
 
-usage: mchosectl [--device PATH] COMMAND [options]
+usage: mchosectl [--device PATH] COMMAND [options]      (mchosectl --version)
 
 reading
   list                               connected keyboards
@@ -108,7 +108,7 @@ struct Args {
 
 Args parse_args(int argc, char** argv)
 {
-    static const char* flags[] = {"--factory", "--off", "--no-backup", "--allow-reboot", "--allow-dangerous",
+    static const char* flags[] = {"--factory", "--off", "--version", "--no-backup", "--allow-reboot", "--allow-dangerous",
                                   "--allow-outside-rotation", "--help", "-h"};
     Args a;
     for (int i = 1; i < argc; ++i) {
@@ -1034,6 +1034,10 @@ int main(int argc, char** argv)
 {
     try {
         Args args = parse_args(argc, argv);
+        if (args.flag("--version") || (!args.pos.empty() && args.pos[0] == "version")) {
+            std::cout << "mchosectl " << MCHOSE_VERSION << "\n";
+            return 0;
+        }
         if (args.pos.empty() || args.flag("--help") || args.flag("-h")) {
             std::cout << kUsage;
             return args.pos.empty() && !args.flag("--help") && !args.flag("-h") ? 2 : 0;

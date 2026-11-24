@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: MIT
+# Push a tag "vX.Y.Z" (matching the version in CMakeLists.txt) to build mchosectl for Linux and Windows and
+# publish a GitHub release with the notes of that version from CHANGELOG.md.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-22.04        # older glibc: the binary runs on most current distributions
+            name: linux-x86_64
+          - os: windows-latest
+            name: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check that the tag matches the project version
+        shell: bash
+        run: |
+          v=$(sed -n 's/^project(mchose-driver VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version v$v"; exit 1; }
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev ninja-build
+
+      - name: Configure (static runtime, bundled hidapi)
+        shell: bash
+        run: |
+          gen=""; [ "$RUNNER_OS" = Linux ] && gen="-G Ninja"
+          cmake -S . -B build $gen -DCMAKE_BUILD_TYPE=Release -DMCHOSE_STATIC_RUNTIME=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: bash
+        run: |
+          d=mchosectl-$VERSION-${{ matrix.name }}
+          mkdir "$d"
+          cp README.md LICENSE CHANGELOG.md "$d"/
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp build/cli/Release/mchosectl.exe "$d"/
+            7z a "$d.zip" "$d" > /dev/null
+            echo "ASSET=$d.zip" >> "$GITHUB_ENV"
+          else
+            cp build/cli/mchosectl packaging/linux/70-mchose-hidraw.rules packaging/linux/INSTALL.txt "$d"/
+            strip "$d/mchosectl"
+            tar czf "$d.tar.gz" "$d"
+            echo "ASSET=$d.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ env.ASSET }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          awk -v v="$v" '$0 ~ "^## "v"( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no CHANGELOG entry for $v"; exit 1; }
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "mchosectl $GITHUB_REF_NAME" --notes-file notes.md

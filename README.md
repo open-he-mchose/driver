@@ -23,6 +23,12 @@ A Qt GUI will follow in `gui/` (GPL-3.0); `core`, `hid` and `cli` stay MIT.
 | Jet75-II (`41E4:211A`) | supported, tested |
 | other `glw` models | planned: model data from the official driver's device table ([devices.json](https://github.com/open-he-mchose/docs/blob/main/data/devices.json)) once their layouts are documented |
 
+## Download
+
+Prebuilt `mchosectl` for Linux (x86_64) and Windows (x64): [Releases](https://github.com/open-he-mchose/driver/releases).
+No installation needed. On Linux, install the udev rule from the archive (see `INSTALL.txt`) or
+[linux-fixes](https://github.com/open-he-mchose/linux-fixes). Changes: [CHANGELOG.md](CHANGELOG.md).
+
 ## mchosectl
 
 ```text
