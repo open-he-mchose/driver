@@ -26,6 +26,7 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doRemap, worker_, &Worker::remap);
     connect(this, &Backend::doAssignFactory, worker_, &Worker::assignFactoryOf);
     connect(this, &Backend::doReset, worker_, &Worker::resetToFactory);
+    connect(this, &Backend::doUnbindMacro, worker_, &Worker::unbindMacro);
     connect(this, &Backend::doLight, worker_, &Worker::applyLight);
     connect(this, &Backend::doBackup, worker_, &Worker::backup);
     connect(this, &Backend::doRestore, worker_, &Worker::restore);
@@ -195,7 +196,11 @@ void Backend::clearMacro(int index)
 {
     macroEditor_.load({});
     emit doSetMacro(index, QString());
+    if (!snap_.macroBindings.value(index).isEmpty())
+        emit doUnbindMacro(index);
 }
+
+void Backend::unbindMacro(int index) { emit doUnbindMacro(index); }
 
 void Backend::bindMacro(int index, int mode)
 {

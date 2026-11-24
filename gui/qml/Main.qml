@@ -8,7 +8,7 @@ ApplicationWindow {
     width: 1180
     height: 820
     minimumWidth: 900
-    minimumHeight: 600
+    minimumHeight: 720
     visible: true
     title: "MCHOSE configurator " + backend.version + (backend.connected ? " — " + backend.modelName : "")
 
@@ -80,8 +80,15 @@ ApplicationWindow {
 
         KeyboardView {
             id: kbd
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
+            // Fixed size: the keyboard never changes size when the window or the tab changes.
+            fixedUnit: 60
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: implicitWidth
+            Layout.minimumWidth: implicitWidth
+            Layout.maximumWidth: implicitWidth
+            Layout.preferredHeight: implicitHeight
+            Layout.minimumHeight: implicitHeight
+            Layout.maximumHeight: implicitHeight
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
                    : tabs.currentIndex === 4 ? "color" : tabs.currentIndex === 5 ? "none" : "depth"
             enabled: backend.connected

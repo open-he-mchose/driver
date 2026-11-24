@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- GUI: the keyboard has a fixed size (no longer changes with the window or the tab); the key picker on the Keymap
+  tab has a background that fits the keys
+- GUI: Macros tab shows the keys a macro is bound to and can remove it from them (they get their default function
+  back); "Delete macro" also frees its keys
+- Jet75-II layout: Delete at the top right, below it Home, PgUp, PgDn (checked on the physical board)
+- Correction to 0.2.0: on Windows macros and Snap Tap work without a fix (reported by a user); the NKRO fix is
+  needed on Linux only
+
 ## 0.2.0 (2026-11-24)
 
 First release of **`mchose-gui`**, the graphical configurator (Qt 6 / Qt Quick, GPL-3.0), and Lua lighting effects.

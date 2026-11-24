@@ -182,11 +182,28 @@ Pane {
                     enabled: backend.connected && !backend.busy && backend.keys.selectedCount > 0 && !panel.editor.modified
                     onClicked: backend.bindMacro(panel.current, [1, 0, 255, times.value][mode.currentIndex])
                 }
+
+                Label { text: qsTr("Bound to"); font.bold: true; Layout.topMargin: 8 }
+                Label {
+                    readonly property string bound: backend.macros.length > panel.current ? backend.macros[panel.current].bound : ""
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: bound.length ? bound : qsTr("no keys")
+                    opacity: bound.length ? 1 : 0.7
+                }
+                Button {
+                    text: qsTr("Remove M%1 from its keys").arg(panel.current + 1)
+                    enabled: backend.connected && !backend.busy && backend.macros.length > panel.current
+                             && backend.macros[panel.current].bound.length > 0
+                    onClicked: backend.unbindMacro(panel.current)
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("The keys get their default function back (all layers of the active profile)")
+                }
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     opacity: 0.7
-                    text: qsTr("Macros are shared by all profiles; bindings belong to the active profile. On Linux macro keys need the NKRO fix (linux-fixes); on Windows they do not reach the system (firmware bug).")
+                    text: qsTr("Macros are shared by all profiles; bindings belong to the active profile. Delete macro also frees its keys. On Linux macro keys need the NKRO fix (linux-fixes).")
                 }
             }
         }

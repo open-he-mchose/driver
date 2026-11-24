@@ -9,12 +9,24 @@ Item {
     property string overlay: "actuation"   // actuation | mapping | color | depth | none
     property bool picker: false               // palette mode: clicking a key emits picked() instead of selecting
     signal picked(int matrixIndex)
-    readonly property real u: Math.min((width - 8) / backend.keys.widthUnits, (height - 8) / backend.keys.heightUnits)
-    readonly property real ox: (width - u * backend.keys.widthUnits) / 2   // centre horizontally
+    // fixedUnit > 0: every key unit is that many pixels and the view has that implicit size (it never changes);
+    // otherwise the keyboard is scaled to fit the item. The background always hugs the keys.
+    property real fixedUnit: 0
+    readonly property real u: fixedUnit > 0 ? fixedUnit
+                              : Math.max(1, Math.min((width - 8) / backend.keys.widthUnits, (height - 8) / backend.keys.heightUnits))
+    readonly property real boardW: u * backend.keys.widthUnits + 8
+    readonly property real boardH: u * backend.keys.heightUnits + 8
+    readonly property real ox: Math.round((width - boardW) / 2) + 4    // left edge of the keys
+    readonly property real oy: Math.round((height - boardH) / 2) + 4   // top edge of the keys
+    implicitWidth: fixedUnit > 0 ? boardW : 400
+    implicitHeight: fixedUnit > 0 ? boardH : 160
     readonly property real maxTravel: 3.4
 
     Rectangle {
-        anchors.fill: parent
+        x: root.ox - 4
+        y: root.oy - 4
+        width: root.boardW
+        height: root.boardH
         radius: 10
         color: palette.base
     }
@@ -35,8 +47,8 @@ Item {
             dragging = false
             const add = (m.modifiers & Qt.ShiftModifier) || (m.modifiers & Qt.ControlModifier)
             if (rect.width < 4 && rect.height < 4) { if (!add) backend.keys.clearSelection(); return }
-            backend.keys.selectRect((rect.x - root.ox) / root.u, (rect.y - 4) / root.u,
-                                    (rect.x + rect.width - root.ox) / root.u, (rect.y + rect.height - 4) / root.u, add)
+            backend.keys.selectRect((rect.x - root.ox) / root.u, (rect.y - root.oy) / root.u,
+                                    (rect.x + rect.width - root.ox) / root.u, (rect.y + rect.height - root.oy) / root.u, add)
         }
     }
     Rectangle {
@@ -68,7 +80,7 @@ Item {
             required property string liveColor
 
             x: root.ox + kx * root.u + 2
-            y: 4 + ky * root.u + 2
+            y: root.oy + ky * root.u + 2
             width: kw * root.u - 4
             height: root.u - 4
 

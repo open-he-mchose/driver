@@ -331,6 +331,24 @@ void Worker::resetToFactory(QVector<int> keys, int layer)
     });
 }
 
+void Worker::unbindMacro(int index)
+{
+    run(tr("Macro M%1 removed from its keys").arg(index + 1), [&] {
+        const int p = kb_->active_profile();
+        for (int l = 0; l < kb_->model().layers; ++l) {
+            const auto cur = kb_->keymap(p, l);
+            QVector<int> keys;
+            for (int k = 0; k < static_cast<int>(cur.size()) && k < kb_->model().keys; ++k)
+                if (cur[static_cast<std::size_t>(k)].type == KeyCode::Macro && cur[static_cast<std::size_t>(k)].code1 == index)
+                    keys << k;
+            if (keys.isEmpty())
+                continue;
+            const auto& f = factory_[static_cast<std::size_t>(l)];
+            setKeys(keys, l, [&](int k) { return forProfile(f[static_cast<std::size_t>(k)], p); }, true);
+        }
+    });
+}
+
 void Worker::setMacro(int index, QString text)
 {
     run(text.trimmed().isEmpty() ? tr("Macro M%1 cleared").arg(index + 1) : tr("Macro M%1 saved").arg(index + 1), [&] {

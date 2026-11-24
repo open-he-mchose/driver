@@ -66,6 +66,7 @@ public slots:
     void remap(QVector<int> keys, int layer, QString code);         // code as text: "Esc", "Ctrl+C", "Mute", "none" ...
     void assignFactoryOf(QVector<int> keys, int layer, int source); // the factory (base layer) function of key `source`
     void resetToFactory(QVector<int> keys, int layer);              // factory code of each key in that layer
+    void unbindMacro(int index);   // keys bound to the macro (all layers, active profile) -> factory code
     void setMacro(int index, QString text);                         // exact text form (format_macro)
     void bindMacro(QVector<int> keys, int layer, int index, int mode);   // mode: 0 hold, 1-254 times, 255 toggle
     void advPair(QVector<int> keys, int layer, int kind, int socdMode);   // kind: 0 SOCD, 1 RS, 2 LT

@@ -138,7 +138,7 @@ Pane {
                             wrapMode: Text.WordWrap
                             opacity: 0.7
                             visible: kind.currentIndex === 0
-                            text: qsTr("Snap Tap output needs the NKRO fix on Linux and does not reach Windows (firmware bug).")
+                            text: qsTr("Snap Tap output needs the NKRO fix on Linux (firmware descriptor bug).")
                         }
                     }
 

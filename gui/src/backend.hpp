@@ -86,7 +86,8 @@ public:
     Q_INVOKABLE void setStreaming(bool on);
     Q_INVOKABLE void editMacro(int index);               // load M(index+1) into macroEditor
     Q_INVOKABLE void saveMacro(int index);               // write the editor's steps
-    Q_INVOKABLE void clearMacro(int index);
+    Q_INVOKABLE void clearMacro(int index);    // empties the macro and frees its keys
+    Q_INVOKABLE void unbindMacro(int index);   // its keys get their default function back
     Q_INVOKABLE void bindMacro(int index, int mode);     // to the selected keys in the current layer
     // Advanced keys on the selected keys in the current layer.
     Q_INVOKABLE void createPair(int kind, int socdMode);   // kind: 0 SOCD, 1 RS, 2 LT
@@ -132,6 +133,7 @@ signals:
     void doBackup(QString path);
     void doRestore(QString path);
     void doStreaming(bool on);
+    void doUnbindMacro(int index);
     void doSetMacro(int index, QString text);
     void doBindMacro(QVector<int> keys, int layer, int index, int mode);
     void doAdvPair(QVector<int> keys, int layer, int kind, int socdMode);
