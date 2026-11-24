@@ -26,6 +26,11 @@ class Backend : public QObject {
     Q_PROPERTY(int lightBrightness READ lightBrightness NOTIFY snapshotChanged)
     Q_PROPERTY(int lightSpeed READ lightSpeed NOTIFY snapshotChanged)
     Q_PROPERTY(QString lightColor READ lightColor NOTIFY snapshotChanged)
+    Q_PROPERTY(bool winLock READ winLock NOTIFY snapshotChanged)
+    Q_PROPERTY(bool altTabLock READ altTabLock NOTIFY snapshotChanged)
+    Q_PROPERTY(bool altF4Lock READ altF4Lock NOTIFY snapshotChanged)
+    Q_PROPERTY(bool menuLock READ menuLock NOTIFY snapshotChanged)
+    Q_PROPERTY(bool macMode READ macMode NOTIFY snapshotChanged)
     Q_PROPERTY(QStringList effectNames READ effectNames CONSTANT)
     Q_PROPERTY(KeyModel* keys READ keys CONSTANT)
     Q_PROPERTY(MacroModel* macroEditor READ macroEditor CONSTANT)
@@ -49,6 +54,11 @@ public:
     int lightBrightness() const { return snap_.lightBrightness; }
     int lightSpeed() const { return snap_.lightSpeed; }
     QString lightColor() const { return snap_.lightColor; }
+    bool winLock() const { return snap_.winLock; }
+    bool altTabLock() const { return snap_.altTabLock; }
+    bool altF4Lock() const { return snap_.altF4Lock; }
+    bool menuLock() const { return snap_.menuLock; }
+    bool macMode() const { return snap_.macMode; }
     QStringList effectNames() const;
     KeyModel* keys() { return &keys_; }
     MacroModel* macroEditor() { return &macroEditor_; }
@@ -78,6 +88,11 @@ public:
     Q_INVOKABLE void createToggle(const QString& code);
     Q_INVOKABLE void createDks(double shallowMm, double deepMm, const QVariantList& actions);
     Q_INVOKABLE void removeAdvanced(int layer, int key);
+    Q_INVOKABLE void setRotation(const QVariantList& profiles);
+    Q_INVOKABLE void copyProfile(int src, int dst);
+    Q_INVOKABLE void setReportRate(int hz);
+    Q_INVOKABLE void setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
+    Q_INVOKABLE void paintSelected(const QString& color);
     // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
     Q_INVOKABLE QVariantList storedSpans(int ds, int de, int us, int ue) const;
 
@@ -107,6 +122,11 @@ signals:
     void doAdvToggle(QVector<int> keys, int layer, QString code);
     void doAdvDks(QVector<int> keys, int layer, int shallow, int deep, QVariantList actions);
     void doAdvClear(int layer, int key);
+    void doRotation(QVector<int> profiles);
+    void doCopyProfile(int src, int dst);
+    void doReportRate(int hz);
+    void doSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
+    void doPaint(QVector<int> keys, QString color);
 
 private:
     QThread thread_;

@@ -33,6 +33,11 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doAdvToggle, worker_, &Worker::advToggle);
     connect(this, &Backend::doAdvDks, worker_, &Worker::advDks);
     connect(this, &Backend::doAdvClear, worker_, &Worker::advClear);
+    connect(this, &Backend::doRotation, worker_, &Worker::setRotation);
+    connect(this, &Backend::doCopyProfile, worker_, &Worker::copyProfile);
+    connect(this, &Backend::doReportRate, worker_, &Worker::setReportRate);
+    connect(this, &Backend::doSettings, worker_, &Worker::setSettings);
+    connect(this, &Backend::doPaint, worker_, &Worker::paintColors);
     connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
 
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
@@ -238,4 +243,30 @@ QVariantList Backend::storedSpans(int ds, int de, int us, int ue) const
     using namespace mchose::glw;
     const DksSpans s = dks_unmask(dks_mask({ds, de, us, ue}));
     return {s.down_start, s.down_end, s.up_start, s.up_end};
+}
+
+void Backend::setRotation(const QVariantList& profiles)
+{
+    QVector<int> l;
+    for (const auto& v : profiles)
+        l.push_back(v.toInt());
+    if (l.isEmpty()) {
+        emit message(tr("At least one profile must be in the rotation"), true);
+        return;
+    }
+    emit doRotation(l);
+}
+
+void Backend::copyProfile(int src, int dst) { emit doCopyProfile(src, dst); }
+void Backend::setReportRate(int hz) { emit doReportRate(hz); }
+void Backend::setSettings(bool w, bool at, bool af, bool m, bool mac) { emit doSettings(w, at, af, m, mac); }
+
+void Backend::paintSelected(const QString& color)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select the keys to colour first"), true);
+        return;
+    }
+    emit doPaint(sel, color);
 }

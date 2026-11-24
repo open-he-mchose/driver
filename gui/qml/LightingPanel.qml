@@ -41,11 +41,26 @@ Pane {
 
         Item {}
         Button {
-            text: qsTr("Apply")
+            text: qsTr("Apply effect")
             highlighted: true
             enabled: backend.connected && !backend.busy && /^#[0-9a-fA-F]{6}$/.test(colorField.text)
             onClicked: backend.applyLight(effect.currentIndex, brightness.value, speed.value, colorField.text)
         }
         Item {}
+
+        Label { text: qsTr("Key colours"); font.bold: true; Layout.topMargin: 10; Layout.columnSpan: 3 }
+        Label { text: qsTr("Colour") }
+        TextField { id: paintColor; text: "#ff0000"; placeholderText: "#rrggbb"; Layout.fillWidth: true }
+        Rectangle { width: 28; height: 28; radius: 4; color: /^#[0-9a-fA-F]{6}$/.test(paintColor.text) ? paintColor.text : "transparent"; border.color: palette.mid }
+        Item {}
+        Button {
+            text: qsTr("Paint %n selected key(s)", "", backend.keys.selectedCount)
+            enabled: backend.connected && !backend.busy && backend.keys.selectedCount > 0 && /^#[0-9a-fA-F]{6}$/.test(paintColor.text)
+            onClicked: backend.paintSelected(paintColor.text)
+        }
+        Label {
+            text: qsTr("shown with the “static” effect")
+            opacity: 0.7
+        }
     }
 }

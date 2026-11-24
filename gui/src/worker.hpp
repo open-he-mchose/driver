@@ -29,6 +29,7 @@ struct Snapshot {
     int lightBrightness = 0;
     int lightSpeed = 0;
     QString lightColor;      // "#rrggbb"
+    bool winLock = false, altTabLock = false, altF4Lock = false, menuLock = false, macMode = false;
     struct Key {
         std::array<QString, 4> mapping;      // readable name of the code in each layer
         std::array<bool, 4> remapped{};      // differs from the factory code of that layer
@@ -71,6 +72,11 @@ public slots:
     void advToggle(QVector<int> keys, int layer, QString code);            // empty code: the key's own function
     void advDks(QVector<int> keys, int layer, int shallow, int deep, QVariantList actions);   // [{key, ds, de, us, ue}]
     void advClear(int layer, int key);
+    void setRotation(QVector<int> profiles);
+    void copyProfile(int src, int dst);
+    void setReportRate(int hz);                       // the keyboard reboots; reconnects afterwards
+    void setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
+    void paintColors(QVector<int> keys, QString color);
     void applyLight(int effect, int brightness, int speed, QString color);
     void backup(QString path);
     void restore(QString path);

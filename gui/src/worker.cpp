@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
+#include <QThread>
 
 #include <algorithm>
 #include <cmath>
@@ -148,6 +149,11 @@ void Worker::refresh()
         s.lightSpeed = fc.light_speed();
         auto c = fc.light_color();
         s.lightColor = hex_color(c[0], c[1], c[2]);
+        s.winLock = fc.win_lock();
+        s.altTabLock = fc.alt_tab_lock();
+        s.altF4Lock = fc.alt_f4_lock();
+        s.menuLock = fc.menu_lock();
+        s.macMode = fc.mac_mode();
         std::array<std::vector<KeyCode>, 4> km;
         for (int l = 0; l < 4 && l < m.layers; ++l)
             km[static_cast<std::size_t>(l)] = kb_->keymap(s.activeProfile, l);
@@ -415,6 +421,80 @@ void Worker::advClear(int layer, int key)
     run(tr("Advanced function removed"), [&] {
         autoBackup();
         kb_->clear_adv(kb_->active_profile(), layer, key);
+    });
+}
+
+void Worker::setRotation(QVector<int> profiles)
+{
+    run(tr("Profile rotation written"), [&] {
+        kb_->set_rotation(std::vector<int>(profiles.begin(), profiles.end()));
+    });
+}
+
+void Worker::copyProfile(int src, int dst)
+{
+    run(tr("Profile %1 copied to %2").arg(src).arg(dst), [&] {
+        autoBackup();
+        kb_->copy_profile(src, dst);
+    });
+}
+
+void Worker::setReportRate(int hz)
+{
+    if (!ready())
+        return;
+    emit busyChanged(true);
+    try {
+        std::uint8_t value = 0;
+        for (std::uint8_t v = 1; v <= 4; ++v)
+            if (report_rate_hz(v) == hz)
+                value = v;
+        if (!value)
+            throw std::runtime_error("unsupported report rate");
+        autoBackup();
+        kb_->set_report_rate_and_reboot(value);
+        emit message(tr("Report rate set to %1 Hz; the keyboard reboots…").arg(hz), false);
+        // Reconnect once the keyboard is back.
+        kb_.reset();
+        transport_.reset();
+        QThread::msleep(1500);
+        for (int i = 0; i < 40 && !kb_; ++i) {
+            connectDevice();
+            if (!kb_)
+                QThread::msleep(250);
+        }
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+    }
+    emit busyChanged(false);
+}
+
+void Worker::setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode)
+{
+    run(tr("Settings written"), [&] {
+        autoBackup();
+        const int p = kb_->active_profile();
+        FuncConfig fc = kb_->funcconfig(p);
+        auto bit = [&](int i, bool on) { fc.raw[6] = static_cast<std::uint8_t>(on ? fc.raw[6] | (1u << i) : fc.raw[6] & ~(1u << i)); };
+        bit(0, winLock);
+        bit(1, altTabLock);
+        bit(2, altF4Lock);
+        bit(3, menuLock);
+        fc.raw[1] = static_cast<std::uint8_t>(kb_->model().layers * p + (macMode ? 2 : 0));   // base layer
+        kb_->set_funcconfig(p, fc);
+    });
+}
+
+void Worker::paintColors(QVector<int> keys, QString color)
+{
+    run(tr("Key colours written"), [&] {
+        const auto rgb = parse_color(color);
+        autoBackup();
+        const int p = kb_->active_profile();
+        auto colors = kb_->colors(p);
+        for (int k : keys)
+            colors[static_cast<std::size_t>(k)] = rgb;
+        kb_->set_colors(p, colors);
     });
 }
 
