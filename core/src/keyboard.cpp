@@ -24,6 +24,13 @@ std::optional<DepthSample> parse_depth_sample(const Report& r)
     return s;
 }
 
+double depth_mm(const DepthSample& s)
+{
+    if (s.adc_rest - s.adc < 20)
+        return 0.0;
+    return s.travel / 100.0;
+}
+
 Keyboard::Keyboard(Transport& transport, Model model) : session_(transport), model_(std::move(model)) {}
 
 void Keyboard::count_write(std::size_t n)

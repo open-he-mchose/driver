@@ -57,6 +57,17 @@ Backend::Backend(QObject* parent) : QObject(parent)
         emit scriptParamsChanged();
     });
     connect(worker_, &Worker::scriptLog, this, &Backend::scriptLog);
+    connect(this, &Backend::doGamepadStart, worker_, &Worker::gamepadStart);
+    connect(this, &Backend::doGamepadStop, worker_, &Worker::gamepadStop);
+    connect(worker_, &Worker::gamepadRunningChanged, this, [this](bool on, const QString& status) {
+        gamepadRunning_ = on;
+        gamepadStatus_ = status;
+        emit gamepadChanged();
+    });
+    connect(worker_, &Worker::gamepadState, this, [this](const QVariantMap& st) {
+        gamepadLive_ = st;
+        emit gamepadLiveChanged();
+    });
     connect(worker_, &Worker::scriptColors, this, [this](const QByteArray& rgb) { keys_.setLiveColors(rgb); });
     connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
 
@@ -88,6 +99,8 @@ Backend::Backend(QObject* parent) : QObject(parent)
 
 Backend::~Backend()
 {
+    if (gamepadRunning_)
+        QMetaObject::invokeMethod(worker_, "gamepadStop", Qt::BlockingQueuedConnection);
     if (scriptRunning_)
         QMetaObject::invokeMethod(worker_, "scriptStop", Qt::BlockingQueuedConnection);
     if (streaming_)
@@ -353,3 +366,183 @@ void Backend::previewParams(const QString& source)
 }
 void Backend::stopScript() { emit doScriptStop(); }
 void Backend::setScriptParam(const QString& name, double value) { emit doScriptParam(name, value); }
+
+// ---------------------------------------------------------------- gamepad
+
+namespace gp = mchose::gamepad;
+
+QStringList Backend::gamepadPresets() const
+{
+    QStringList l;
+    for (const auto& n : gp::preset_names())
+        l << QString::fromStdString(n);
+    return l;
+}
+
+QStringList Backend::gamepadTargets() const
+{
+    QStringList l;
+    for (const auto& n : gp::target_names())
+        l << QString::fromStdString(n);
+    return l;
+}
+
+QString Backend::gamepadPreset(const QString& name) const { return QString::fromStdString(gp::preset_text(name.toStdString())); }
+
+std::optional<int> Backend::keyByName(QStringView name) const
+{
+    if (name.startsWith(u'#')) {
+        bool ok = false;
+        const int i = name.mid(1).toInt(&ok);
+        return ok && i >= 0 && i < snap_.factoryNames.size() ? std::optional<int>(i) : std::nullopt;
+    }
+    for (int i = 0; i < snap_.factoryNames.size(); ++i)
+        if (snap_.factoryNames[i].compare(name, Qt::CaseInsensitive) == 0)
+            return i;
+    return std::nullopt;
+}
+
+QString Backend::keyName(int index) const
+{
+    const QString n = snap_.factoryNames.value(index);
+    // Names must be unique and readable back; otherwise use the index.
+    if (n.isEmpty() || n.contains(u' ') || n.contains(u'=') || n.startsWith(u'#') || keyByName(n) != index)
+        return QStringLiteral("#%1").arg(index);
+    return n;
+}
+
+namespace {
+
+QString shortTarget(gp::Target t)
+{
+    static const char* names[] = {"L↑", "L↓", "L←", "L→", "R↑", "R↓", "R←", "R→", "LT", "RT", "A", "B", "X", "Y", "LB", "RB",
+                                  "Back", "Start", "Guide", "L3", "R3", "D↑", "D↓", "D←", "D→"};
+    const auto i = static_cast<std::size_t>(t);
+    return i < std::size(names) ? QString::fromUtf8(names[i]) : QString();
+}
+
+}  // namespace
+
+QVariantMap Backend::gamepadCheck(const QString& text)
+{
+    QHash<int, QString> labels;
+    try {
+        const auto cfg = gp::parse_config(text.toStdString(), [this](std::string_view n) {
+            return keyByName(QString::fromUtf8(n.data(), static_cast<int>(n.size())));
+        });
+        for (const auto& b : cfg.bindings)
+            labels[b.key] = labels.contains(b.key) ? labels[b.key] + "," + shortTarget(b.target) : shortTarget(b.target);
+        keys_.setGamepadLabels(labels);
+        return {{"ok", true}, {"error", QString()}, {"count", static_cast<int>(cfg.bindings.size())},
+                {"deadzone", cfg.curve.deadzone}, {"full", cfg.curve.full}, {"button", cfg.curve.button}};
+    } catch (const std::exception& e) {
+        keys_.setGamepadLabels(labels);
+        return {{"ok", false}, {"error", QString::fromStdString(e.what())}, {"count", 0}};
+    }
+}
+
+namespace {
+
+// The key of a "KEY = TARGET" line, or empty for comments, blank lines and curve settings.
+QString lineKey(const QString& line)
+{
+    QString l = line;
+    for (int i = 0; i < l.size(); ++i)
+        if (l[i] == u'#' && (i == 0 || l[i - 1].isSpace()) && !(i + 1 < l.size() && l[i + 1].isDigit())) {
+            l.truncate(i);
+            break;
+        }
+    const int eq = l.indexOf(u'=', 1);
+    if (eq < 0)
+        return {};
+    const QString k = l.left(eq).trimmed();
+    const QString lower = k.toLower();
+    if (lower == "deadzone" || lower == "full" || lower == "button")
+        return {};
+    return k;
+}
+
+}  // namespace
+
+QString Backend::gamepadBindSelected(const QString& text, const QString& target)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select the keys to map on the keyboard at the top"), true);
+        return text;
+    }
+    QStringList out;
+    for (const QString& line : text.split(u'\n')) {
+        const QString k = lineKey(line);
+        if (!k.isEmpty()) {
+            const auto idx = keyByName(k);
+            if (idx && sel.contains(*idx))
+                continue;   // replaced below
+        }
+        out << line;
+    }
+    while (!out.isEmpty() && out.last().trimmed().isEmpty())
+        out.removeLast();
+    for (int k : sel)
+        out << keyName(k) + " = " + target;
+    return out.join(u'\n') + u'\n';
+}
+
+QString Backend::gamepadUnbindSelected(const QString& text)
+{
+    const auto sel = keys_.selectedIndices();
+    QStringList out;
+    for (const QString& line : text.split(u'\n')) {
+        const QString k = lineKey(line);
+        if (!k.isEmpty()) {
+            const auto idx = keyByName(k);
+            if (idx && sel.contains(*idx))
+                continue;
+        }
+        out << line;
+    }
+    return out.join(u'\n');
+}
+
+QString Backend::gamepadSetCurve(const QString& text, const QString& name, double value)
+{
+    QStringList lines = text.split(u'\n');
+    const QString entry = name + " = " + QString::number(value, 'f', 2);
+    for (QString& line : lines) {
+        const int eq = line.indexOf(u'=');
+        if (eq > 0 && line.left(eq).trimmed().compare(name, Qt::CaseInsensitive) == 0) {
+            line = entry;
+            return lines.join(u'\n');
+        }
+    }
+    while (!lines.isEmpty() && lines.last().trimmed().isEmpty())
+        lines.removeLast();
+    lines << entry;
+    return lines.join(u'\n') + u'\n';
+}
+
+void Backend::startGamepad(const QString& text) { emit doGamepadStart(text); }
+void Backend::stopGamepad() { emit doGamepadStop(); }
+
+void Backend::gamepadKeysTyping(const QString& text, bool typing)
+{
+    QVector<int> keys;
+    try {
+        const auto cfg = gp::parse_config(text.toStdString(), [this](std::string_view n) {
+            return keyByName(QString::fromUtf8(n.data(), static_cast<int>(n.size())));
+        });
+        for (const auto& b : cfg.bindings)
+            if (!keys.contains(b.key))
+                keys << b.key;
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+        return;
+    }
+    if (keys.isEmpty())
+        return;
+    const int layer = snap_.macMode ? 2 : 0;   // the base layer in use
+    if (typing)
+        emit doReset(keys, layer);
+    else
+        emit doRemap(keys, layer, QStringLiteral("none"));
+}

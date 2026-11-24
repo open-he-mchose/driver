@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Lets the logged-in user create the virtual gamepad of mchose-gui / mchosectl gamepad (/dev/uinput).
+# Install: sudo cp 72-mchose-uinput.rules /etc/udev/rules.d/ && sudo udevadm control --reload
+#          && sudo modprobe uinput && sudo udevadm trigger --name-match=uinput
+# (Many distributions already allow this, e.g. for Steam; then the rule is not needed.)
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

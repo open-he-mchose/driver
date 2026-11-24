@@ -37,6 +37,9 @@ struct DepthSample {
     int adc_rest = 0;
 };
 std::optional<DepthSample> parse_depth_sample(const Report& report);
+// Travel in mm without the release lag: the firmware's travel field freezes when a key settles, so a sample whose
+// ADC is within 20 of the rest value counts as 0 (verified; docs: Jet75-II switches, "Lag and how to avoid it").
+double depth_mm(const DepthSample& s);
 
 struct ProfileImage {
     std::array<std::uint8_t, 64> funcconfig{};

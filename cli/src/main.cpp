@@ -13,6 +13,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <array>
 #include <chrono>
 #include <sstream>
 #include <string>
@@ -25,6 +26,9 @@
 #include "mchose/hid/hidapi_transport.hpp"
 #ifdef MCHOSE_HAVE_SCRIPT
 #include "mchose/script/script_player.hpp"
+#endif
+#ifdef MCHOSE_HAVE_GAMEPAD
+#include "mchose/gamepad/gamepad.hpp"
 #endif
 
 using namespace mchose;
@@ -76,6 +80,9 @@ writing (every write is saved to the keyboard's flash; a full backup is made fir
   restore FILE                       write back what differs from FILE
 
 live
+  gamepad [--preset NAME | --map FILE] [--show]
+                                     analog keys as a virtual Xbox 360 controller until Ctrl+C
+                                     (Linux: uinput; Windows: ViGEmBus); gamepad --presets lists presets
   depth [--off]                      stream key depth until Ctrl+C (sets the FuncConfig debug bit;
                                      --off clears a bit left set)
 
@@ -114,7 +121,7 @@ struct Args {
 Args parse_args(int argc, char** argv)
 {
     static const char* flags[] = {"--factory", "--off", "--version", "--no-backup", "--allow-reboot", "--allow-dangerous",
-                                  "--allow-outside-rotation", "--help", "-h"};
+                                  "--allow-outside-rotation", "--help", "-h", "--presets", "--show"};
     Args a;
     for (int i = 1; i < argc; ++i) {
         std::string s = argv[i];
@@ -997,6 +1004,82 @@ int cmd_depth(Tool& t)
     return 0;
 }
 
+int cmd_gamepad(Tool& t)
+{
+#ifdef MCHOSE_HAVE_GAMEPAD
+    namespace gp = mchose::gamepad;
+    if (t.args_.flag("--presets")) {
+        for (const auto& n : gp::preset_names())
+            std::cout << n << "\n";
+        return 0;
+    }
+    std::string text;
+    if (t.args_.flag("--map")) {
+        std::ifstream in(t.args_.get("--map"));
+        if (!in)
+            throw std::runtime_error("cannot read " + t.args_.get("--map"));
+        std::stringstream ss;
+        ss << in.rdbuf();
+        text = ss.str();
+    } else {
+        const std::string name = t.args_.get("--preset", "wasd-left-stick");
+        text = gp::preset_text(name);
+        if (text.empty())
+            throw std::runtime_error("unknown preset '" + name + "' (gamepad --presets lists them)");
+    }
+    auto& kb = t.kb();
+    const gp::Config cfg = gp::parse_config(text, [&](std::string_view n) -> std::optional<int> {
+        try {
+            return t.key_index(std::string(n));
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    });
+    const auto factory = kb.factory_keymap(0);
+    std::map<std::array<std::uint8_t, 3>, int> index_of;
+    for (int i = 0; i < kb.model().keys; ++i)
+        index_of[factory[static_cast<std::size_t>(i)].bytes()] = i;
+
+    gp::VirtualPad pad;
+    std::cerr << pad.status() << "\n";
+    if (!pad.ok())
+        return 1;
+    gp::Mapper mapper(cfg);
+    std::cerr << cfg.bindings.size() << " keys mapped (dead zone " << cfg.curve.deadzone << " mm, full " << cfg.curve.full
+              << " mm, buttons at " << cfg.curve.button << " mm). The keys still type on the keyboard: use a profile in\n"
+              << "which they are disabled (mchosectl remap KEY none) for games. Ctrl+C to stop.\n";
+    std::signal(SIGINT, on_signal);
+#ifdef SIGTERM
+    std::signal(SIGTERM, on_signal);
+#endif
+    kb.set_depth_stream(true);
+    DepthStreamGuard guard{kb};
+    const bool show = t.args_.flag("--show");
+    while (!g_stop) {
+        auto rep = kb.session().transport().read(std::chrono::milliseconds(200));
+        if (!rep)
+            continue;
+        auto s = parse_depth_sample(*rep);
+        if (!s)
+            continue;
+        auto it = index_of.find(s->key.bytes());
+        if (it == index_of.end() || !mapper.uses(it->second))
+            continue;
+        mapper.set_depth(it->second, depth_mm(*s));
+        const auto st = mapper.state();
+        pad.send(st);
+        if (show)
+            std::printf("L %+5.2f %+5.2f  R %+5.2f %+5.2f  LT %4.2f RT %4.2f  buttons %05X\n", st.lx, st.ly, st.rx, st.ry, st.lt,
+                        st.rt, static_cast<unsigned>(st.buttons));
+    }
+    pad.send(gp::State{});
+    return 0;
+#else
+    (void)t;
+    throw std::runtime_error("this mchosectl was built without the gamepad module (MCHOSE_BUILD_GAMEPAD=OFF)");
+#endif
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -1027,6 +1110,7 @@ int main(int argc, char** argv)
         if (c == "backup") return cmd_backup(t);
         if (c == "restore") return cmd_restore(t);
         if (c == "depth") return cmd_depth(t);
+        if (c == "gamepad") return cmd_gamepad(t);
         std::cerr << "unknown command '" << c << "'\n\n" << kUsage;
         return 2;
     } catch (const SafetyError& e) {

@@ -1,0 +1,19 @@
+# WASD = left stick (analog), arrows = right stick, Space = A, Shift = left trigger.
+W = left-up
+A = left-left
+S = left-down
+D = left-right
+Up = right-up
+Down = right-down
+Left = right-left
+Right = right-right
+Space = a
+LShift = lt
+LCtrl = b
+E = x
+Q = y
+Tab = back
+Esc = start
+deadzone = 0.3
+full = 3.0
+button = 1.2

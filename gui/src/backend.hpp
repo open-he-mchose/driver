@@ -3,6 +3,8 @@
 #pragma once
 
 #include <QObject>
+
+#include <optional>
 #include <QStringList>
 #include <QThread>
 #include <QUrl>
@@ -41,6 +43,11 @@ class Backend : public QObject {
     Q_PROPERTY(bool scriptRunning READ scriptRunning NOTIFY scriptRunningChanged)
     Q_PROPERTY(QVariantList scriptParams READ scriptParams NOTIFY scriptParamsChanged)
     Q_PROPERTY(QStringList scriptExamples READ scriptExamples CONSTANT)
+    Q_PROPERTY(QStringList gamepadPresets READ gamepadPresets CONSTANT)
+    Q_PROPERTY(QStringList gamepadTargets READ gamepadTargets CONSTANT)
+    Q_PROPERTY(bool gamepadRunning READ gamepadRunning NOTIFY gamepadChanged)
+    Q_PROPERTY(QString gamepadStatus READ gamepadStatus NOTIFY gamepadChanged)
+    Q_PROPERTY(QVariantMap gamepadLive READ gamepadLive NOTIFY gamepadLiveChanged)
 public:
     explicit Backend(QObject* parent = nullptr);
     ~Backend() override;
@@ -72,6 +79,11 @@ public:
     bool scriptRunning() const { return scriptRunning_; }
     QVariantList scriptParams() const { return scriptParams_; }
     QStringList scriptExamples() const;
+    QStringList gamepadPresets() const;
+    QStringList gamepadTargets() const;
+    bool gamepadRunning() const { return gamepadRunning_; }
+    QString gamepadStatus() const { return gamepadStatus_; }
+    QVariantMap gamepadLive() const { return gamepadLive_; }
 
     Q_INVOKABLE void connectDevice();
     Q_INVOKABLE void refresh();
@@ -108,6 +120,15 @@ public:
     Q_INVOKABLE void previewParams(const QString& source);   // parameters of a script before it runs
     Q_INVOKABLE void stopScript();
     Q_INVOKABLE void setScriptParam(const QString& name, double value);
+    // Gamepad: the mapping is edited as text (see mchose/gamepad/gamepad.hpp); these helpers edit that text.
+    Q_INVOKABLE QString gamepadPreset(const QString& name) const;
+    Q_INVOKABLE QVariantMap gamepadCheck(const QString& text);   // {ok, error, count, deadzone, full, button}; updates the key labels
+    Q_INVOKABLE QString gamepadBindSelected(const QString& text, const QString& target);
+    Q_INVOKABLE QString gamepadUnbindSelected(const QString& text);
+    Q_INVOKABLE QString gamepadSetCurve(const QString& text, const QString& name, double value);
+    Q_INVOKABLE void startGamepad(const QString& text);
+    Q_INVOKABLE void stopGamepad();
+    Q_INVOKABLE void gamepadKeysTyping(const QString& text, bool typing);   // false: disable the mapped keys in the base layer
     // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
     Q_INVOKABLE QVariantList storedSpans(int ds, int de, int us, int ue) const;
 
@@ -120,6 +141,8 @@ signals:
     void scriptRunningChanged();
     void scriptParamsChanged();
     void scriptLog(QString line, bool error);
+    void gamepadChanged();
+    void gamepadLiveChanged();
 
     // to the worker thread
     void doConnect();
@@ -149,6 +172,8 @@ signals:
     void doScriptRun(QString source, QString name, QVariantMap values);
     void doScriptStop();
     void doScriptParam(QString name, double value);
+    void doGamepadStart(QString config);
+    void doGamepadStop();
 
 private:
     QThread thread_;
@@ -160,5 +185,10 @@ private:
     bool busy_ = false;
     bool streaming_ = false;
     bool scriptRunning_ = false;
+    bool gamepadRunning_ = false;
+    QString gamepadStatus_;
+    QVariantMap gamepadLive_;
+    std::optional<int> keyByName(QStringView name) const;   // factory name or #N -> matrix index
+    QString keyName(int index) const;
     QVariantList scriptParams_;
 };

@@ -105,6 +105,7 @@ void Worker::connectDevice()
             emit scriptRunningChanged(false);
         }
         player_.reset();
+        stopGamepadQuietly();
         kb_.reset();
         transport_.reset();
         auto devs = hid::enumerate();
@@ -188,6 +189,8 @@ void Worker::refresh()
             key.color = hex_color(colors[k][0], colors[k][1], colors[k][2]);
             s.keys.push_back(key);
         }
+        for (int k = 0; k < m.keys && k < static_cast<int>(factory_[0].size()); ++k)
+            s.factoryNames << QString::fromStdString(to_string(factory_[0][static_cast<std::size_t>(k)]));
         // Macros (shared by all profiles) and the keys bound to them in this profile.
         auto macros = kb_->macros();
         for (int i = 0; i < kMacroCount; ++i) {
@@ -484,6 +487,7 @@ void Worker::setReportRate(int hz)
         // Reconnect once the keyboard is back.
         scriptTimer_->stop();
         player_.reset();
+        stopGamepadQuietly();
         kb_.reset();
         transport_.reset();
         QThread::msleep(1500);
@@ -531,6 +535,10 @@ void Worker::scriptRun(QString source, QString name, QVariantMap values)
 {
     if (!ready())
         return;
+    if (pad_) {
+        stopGamepadQuietly();
+        emit message(tr("Gamepad stopped: live colours pause the depth stream it needs"), false);
+    }
     try {
         if (!player_) {
             player_ = std::make_unique<mchose::script::ScriptPlayer>(*kb_);
@@ -631,11 +639,80 @@ void Worker::restore(QString path)
     });
 }
 
+void Worker::gamepadStart(QString config)
+{
+    if (!ready())
+        return;
+    namespace gp = mchose::gamepad;
+    try {
+        if (scriptTimer_->isActive()) {
+            scriptStop();
+            emit message(tr("Lighting effect stopped: live colours pause the depth stream the gamepad needs"), false);
+        }
+        const auto& f = factory_[0];
+        const gp::Config cfg = gp::parse_config(config.toStdString(), [&](std::string_view n) -> std::optional<int> {
+            if (!n.empty() && n[0] == '#') {
+                try {
+                    const int i = std::stoi(std::string(n.substr(1)));
+                    return i >= 0 && i < kb_->model().keys ? std::optional<int>(i) : std::nullopt;
+                } catch (const std::exception&) {
+                    return std::nullopt;
+                }
+            }
+            const QString want = QString::fromUtf8(n.data(), static_cast<int>(n.size()));
+            for (int i = 0; i < kb_->model().keys && i < static_cast<int>(f.size()); ++i)
+                if (QString::fromStdString(to_string(f[static_cast<std::size_t>(i)])).compare(want, Qt::CaseInsensitive) == 0)
+                    return i;
+            return std::nullopt;
+        });
+        if (cfg.bindings.empty())
+            throw std::runtime_error("no keys are mapped");
+        auto pad = std::make_unique<gp::VirtualPad>();
+        if (!pad->ok()) {
+            emit gamepadRunningChanged(false, QString::fromStdString(pad->status()));
+            emit message(QString::fromStdString(pad->status()), true);
+            return;
+        }
+        mapper_ = std::make_unique<gp::Mapper>(cfg);
+        const QString status = QString::fromStdString(pad->status());
+        pad_ = std::move(pad);
+        if (!streamTimer_->isActive()) {
+            kb_->set_depth_stream(true);
+            streamTimer_->start();
+            emit streamingChanged(true);
+        }
+        emit gamepadRunningChanged(true, status);
+        emit message(tr("Gamepad on: %n key(s) mapped", "", static_cast<int>(cfg.bindings.size())), false);
+    } catch (const std::exception& e) {
+        stopGamepadQuietly();
+        emit gamepadRunningChanged(false, QString::fromStdString(e.what()));
+        emit message(QString::fromStdString(e.what()), true);
+    }
+}
+
+void Worker::stopGamepadQuietly()
+{
+    if (pad_)
+        pad_->send({});
+    pad_.reset();
+    mapper_.reset();
+}
+
+void Worker::gamepadStop()
+{
+    const bool was = pad_ != nullptr;
+    stopGamepadQuietly();
+    emit gamepadRunningChanged(false, was ? tr("stopped") : QString());
+    emit gamepadState({});
+}
+
 void Worker::setStreaming(bool on)
 {
     if (!ready())
         return;
     try {
+        if (!on && pad_)
+            gamepadStop();
         kb_->set_depth_stream(on);
         if (on)
             streamTimer_->start();
@@ -659,8 +736,22 @@ void Worker::pollStream()
                 break;
             if (auto s = parse_depth_sample(*rep)) {
                 auto it = factoryIndex_.find(s->key.bytes());
-                if (it != factoryIndex_.end())
-                    emit depth(it->second, s->travel / 100.0, s->pressed);
+                if (it != factoryIndex_.end()) {
+                    const double mm = depth_mm(*s);
+                    emit depth(it->second, mm, s->pressed);
+                    if (mapper_ && pad_ && mapper_->uses(it->second)) {
+                        mapper_->set_depth(it->second, mm);
+                        const auto st = mapper_->state();
+                        pad_->send(st);
+                        QStringList buttons;
+                        for (auto t = static_cast<unsigned>(mchose::gamepad::Target::A);
+                             t < static_cast<unsigned>(mchose::gamepad::Target::Count); ++t)
+                            if (st.buttons & (1u << t))
+                                buttons << QString::fromLatin1(mchose::gamepad::target_name(static_cast<mchose::gamepad::Target>(t)).data());
+                        emit gamepadState(QVariantMap{{"lx", st.lx}, {"ly", st.ly}, {"rx", st.rx}, {"ry", st.ry},
+                                                      {"lt", st.lt}, {"rt", st.rt}, {"buttons", buttons}});
+                    }
+                }
             }
         }
     } catch (const std::exception& e) {

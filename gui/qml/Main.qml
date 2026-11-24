@@ -90,7 +90,8 @@ ApplicationWindow {
             Layout.minimumHeight: implicitHeight
             Layout.maximumHeight: implicitHeight
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
-                   : tabs.currentIndex === 4 ? "color" : tabs.currentIndex === 5 ? "none" : "depth"
+                   : tabs.currentIndex === 4 ? "color" : tabs.currentIndex === 5 ? "none"
+                   : tabs.currentIndex === 6 ? "gamepad" : "depth"
             enabled: backend.connected
             opacity: backend.connected ? 1 : 0.4
         }
@@ -100,7 +101,7 @@ ApplicationWindow {
             spacing: 8
             TabBar {
                 id: tabs
-                Layout.preferredWidth: 640
+                Layout.preferredWidth: 720
                 Layout.minimumWidth: 400
                 currentIndex: win.startTab
                 TabButton { text: qsTr("Actuation") }
@@ -109,6 +110,7 @@ ApplicationWindow {
                 TabButton { text: qsTr("Advanced") }
                 TabButton { text: qsTr("Lighting") }
                 TabButton { text: qsTr("Effects") }
+                TabButton { text: qsTr("Gamepad") }
                 TabButton { text: qsTr("Device") }
             }
             Label {
@@ -135,6 +137,7 @@ ApplicationWindow {
             AdvancedPanel {}
             LightingPanel {}
             ScriptPanel {}
+            GamepadPanel {}
             DevicePanel {}
         }
     }

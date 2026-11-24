@@ -17,7 +17,7 @@ class KeyModel : public QAbstractListModel {
 public:
     enum Role {
         IndexRole = Qt::UserRole + 1, LabelRole, XRole, YRole, WRole, MappingRole, ActuationRole, ModeRole,
-        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole, RemappedRole, DangerousRole, LiveColorRole
+        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole, RemappedRole, DangerousRole, LiveColorRole, GamepadRole
     };
 
     explicit KeyModel(QObject* parent = nullptr);
@@ -27,6 +27,7 @@ public:
     void setDepth(int matrixIndex, double mm, bool pressed);
     void clearDepth();
     void setLiveColors(const QByteArray& rgb);   // empty: no preview
+    void setGamepadLabels(const QHash<int, QString>& labels);   // matrix index -> short target name
 
     int rowCount(const QModelIndex& = {}) const override { return static_cast<int>(keys_.size()); }
     QVariant data(const QModelIndex& index, int role) const override;
@@ -58,6 +59,7 @@ private:
         bool pressed = false;
         bool selected = false;
         QString live;   // "#rrggbb" while an effect runs, else empty
+        QString gamepad;   // gamepad target of the key, e.g. "L↑", "A"
     };
     QVector<Item> keys_;
     QVector<int> rowOfIndex_;   // matrix index -> row

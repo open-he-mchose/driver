@@ -17,6 +17,7 @@
 
 #include "mchose/glw/keyboard.hpp"
 #include "mchose/hid/hidapi_transport.hpp"
+#include "mchose/gamepad/gamepad.hpp"
 #include "mchose/script/script_player.hpp"
 
 // Everything the UI shows, read from the keyboard in one go.
@@ -40,6 +41,7 @@ struct Snapshot {
         QString color;       // stored colour "#rrggbb"
     };
     QVector<Key> keys;       // by matrix index
+    QStringList factoryNames;   // factory layer-0 key name by matrix index ("LShift", "Up")
     QStringList macroTexts;      // 16 macros in the exact text form (empty = no macro)
     QVector<int> macroSteps;     // number of steps
     QStringList macroBindings;   // keys bound to each macro in the active profile, e.g. "F10 (once)"
@@ -86,6 +88,8 @@ public slots:
     void backup(QString path);
     void restore(QString path);
     void setStreaming(bool on);
+    void gamepadStart(QString config);   // mapping text (mchose::gamepad::parse_config); turns the depth stream on
+    void gamepadStop();
 
 signals:
     void connectedChanged(bool connected, QString model);
@@ -98,6 +102,8 @@ signals:
     void scriptParams(QVariantList params);      // [{name, label, min, max, value}]
     void scriptLog(QString line, bool error);
     void scriptColors(QByteArray rgb);           // 3 bytes per matrix index, after every frame
+    void gamepadRunningChanged(bool running, QString status);
+    void gamepadState(QVariantMap state);        // lx ly rx ry (-1..1, +y up), lt rt (0..1), buttons [names]
 
 private:
     bool ready();
@@ -116,5 +122,8 @@ private:
     QTimer* streamTimer_ = nullptr;
     QTimer* scriptTimer_ = nullptr;
     std::unique_ptr<mchose::script::ScriptPlayer> player_;
+    std::unique_ptr<mchose::gamepad::VirtualPad> pad_;
+    std::unique_ptr<mchose::gamepad::Mapper> mapper_;
+    void stopGamepadQuietly();
     bool backedUp_ = false;
 };

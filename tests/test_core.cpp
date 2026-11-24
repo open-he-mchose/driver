@@ -336,6 +336,17 @@ TEST(depth_sample_parse)
     CHECK_EQ(s->adc_rest, 4000);
 }
 
+TEST(depth_mm_release_lag)
+{
+    DepthSample s;
+    s.travel = 280;
+    s.adc = 3000;
+    s.adc_rest = 4000;
+    CHECK_EQ(depth_mm(s), 2.8);
+    s.adc = 3985;   // sensor back at rest, travel field frozen at 2.8 mm
+    CHECK_EQ(depth_mm(s), 0.0);
+}
+
 TEST(macro_text_parse)
 {
     using K = MacroAction::Kind;

@@ -1,0 +1,16 @@
+# Racing: W = throttle (right trigger), S = brake (left trigger), A / D = steering (left stick).
+W = rt
+S = lt
+A = left-left
+D = left-right
+Space = a
+LShift = x
+LCtrl = b
+R = y
+Q = lb
+E = rb
+Esc = start
+Tab = back
+deadzone = 0.2
+full = 3.2
+button = 1.2

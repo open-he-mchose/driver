@@ -14,7 +14,7 @@ void KeyModel::setLayout(std::span<const mchose::KeyCap> layout)
     height_ = 0;
     for (const auto& cap : layout) {
         rowOfIndex_[cap.index] = static_cast<int>(keys_.size());
-        keys_.push_back({cap, {}, 0, false, false, {}});
+        keys_.push_back({cap, {}, 0, false, false, {}, {}});
         width_ = std::max(width_, static_cast<double>(cap.x + cap.w));
         height_ = std::max(height_, static_cast<double>(cap.y + 1));
     }
@@ -69,6 +69,14 @@ void KeyModel::setLiveColors(const QByteArray& rgb)
         emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {LiveColorRole});
 }
 
+void KeyModel::setGamepadLabels(const QHash<int, QString>& labels)
+{
+    for (auto& k : keys_)
+        k.gamepad = labels.value(k.cap.index);
+    if (!keys_.isEmpty())
+        emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {GamepadRole});
+}
+
 void KeyModel::clearDepth()
 {
     for (auto& k : keys_) {
@@ -102,6 +110,7 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case RemappedRole: return k.settings.remapped[static_cast<std::size_t>(layer_)];
     case DangerousRole: return k.settings.dangerous[static_cast<std::size_t>(layer_)];
     case LiveColorRole: return k.live;
+    case GamepadRole: return k.gamepad;
     default: return {};
     }
 }
@@ -112,7 +121,7 @@ QHash<int, QByteArray> KeyModel::roleNames() const
             {WRole, "kw"},              {MappingRole, "mapping"}, {ActuationRole, "actuation"}, {ModeRole, "mode"},
             {PressRole, "rtPress"},     {ReleaseRole, "rtRelease"}, {ColorRole, "keyColor"}, {DepthRole, "depth"},
             {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"},
-            {DangerousRole, "dangerous"}, {LiveColorRole, "liveColor"}};
+            {DangerousRole, "dangerous"}, {LiveColorRole, "liveColor"}, {GamepadRole, "gamepadLabel"}};
 }
 
 void KeyModel::select(int row, bool add)

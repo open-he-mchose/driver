@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: MIT
+// Generated from gamepad/presets/*.txt by CMake.
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace mchose::gamepad::detail {
+
+const std::vector<std::pair<std::string_view, std::string_view>>& presets()
+{
+    static const std::vector<std::pair<std::string_view, std::string_view>> p = {
+@MCHOSE_PRESET_ENTRIES@    };
+    return p;
+}
+
+}  // namespace mchose::gamepad::detail
