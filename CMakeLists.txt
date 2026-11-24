@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MCHOSE_BUILD_CLI "Build the hid transport and the mchosectl command-line tool" ON)
 option(MCHOSE_BUILD_GUI "Build the Qt 6 GUI (needs Qt 6.5+: Core, Gui, Qml, Quick, QuickControls2)" OFF)
+option(MCHOSE_BUILD_SCRIPT "Build the Lua lighting scripts module (downloads Lua 5.4 from lua.org)" ON)
 option(MCHOSE_BUILD_TESTS "Build the unit tests (core only, no keyboard needed)" ON)
 option(MCHOSE_FETCH_HIDAPI "Download and build hidapi if it is not installed" ON)
 option(MCHOSE_STATIC_RUNTIME "Link the C/C++ runtime statically (release binaries)" OFF)
@@ -33,6 +34,9 @@ else()
 endif()
 
 add_subdirectory(core)
+if(MCHOSE_BUILD_SCRIPT)
+  add_subdirectory(script)
+endif()
 
 if(MCHOSE_BUILD_CLI)
   add_subdirectory(hid)

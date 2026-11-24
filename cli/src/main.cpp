@@ -23,6 +23,9 @@
 #include "mchose/glw/keyboard.hpp"
 #include "mchose/glw/macro_text.hpp"
 #include "mchose/hid/hidapi_transport.hpp"
+#ifdef MCHOSE_HAVE_SCRIPT
+#include "mchose/script/script_player.hpp"
+#endif
 
 using namespace mchose;
 using namespace mchose::glw;
@@ -54,6 +57,8 @@ writing (every write is saved to the keyboard's flash; a full backup is made fir
   light effects                      effect names
   light color KEY... RRGGBB          stored per-key colours (shown by the static effect); KEY may be "all"
   light live RRGGBB|rainbow [--seconds N]   live colours, RAM only (no flash writes)
+  light script FILE.lua [--seconds N] [--fps N] [--param NAME=VALUE]
+                                     run a Lua lighting effect (live colours; reacts to key presses)
   macro set N "TEXT" [--delay MS]    store macro N (1-16), e.g. "Ctrl+C", "+LShift +A 50ms -A -LShift",
                                      "\"text to type\"", "wait 200ms"; delays are after the previous action
   macro clear N|all
@@ -559,6 +564,47 @@ int cmd_light(Tool& t)
         if (fc.light_effect() != 0)
             std::cout << "note: stored colours show with the static effect: mchosectl light set --effect static\n";
         return 0;
+    }
+    if (sub == "script") {
+#ifdef MCHOSE_HAVE_SCRIPT
+        if (pos.size() < 3)
+            throw std::runtime_error("usage: light script FILE.lua [--seconds N] [--fps N] [--param NAME=VALUE ...]");
+        std::ifstream in(pos[2]);
+        if (!in)
+            throw std::runtime_error("cannot read " + pos[2]);
+        std::stringstream src;
+        src << in.rdbuf();
+        mchose::script::ScriptPlayer player(kb);
+        player.script().set_print_handler([](const std::string& l) { std::cerr << "[script] " << l << "\n"; });
+        player.load(src.str(), fs::path(pos[2]).filename().string());
+        for (const auto& kv : t.args_.all("--param")) {
+            const auto eq = kv.find('=');
+            if (eq == std::string::npos)
+                throw std::runtime_error("--param needs NAME=VALUE");
+            player.script().set_param(kv.substr(0, eq), std::stod(kv.substr(eq + 1)));
+        }
+        for (const auto& p : player.script().params())
+            std::cerr << "param " << p.name << " = " << p.value << "  (" << p.label << ", " << p.min << " .. " << p.max << ")\n";
+        std::cerr << player.input().status() << "\n";
+        const double seconds = std::stod(t.args_.get("--seconds", "0"));
+        const int fps = std::clamp(to_int(t.args_.get("--fps", "25"), "fps"), 1, 60);
+        std::cerr << "running" << (seconds > 0 ? " for " + t.args_.get("--seconds") + " s" : std::string(" until Ctrl+C"))
+                  << " (live colours, no flash writes)\n";
+        std::signal(SIGINT, on_signal);
+        const auto start = std::chrono::steady_clock::now();
+        auto next = start;
+        while (!g_stop) {
+            if (seconds > 0 && std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() >= seconds)
+                break;
+            player.step();
+            next += std::chrono::microseconds(1000000 / fps);
+            std::this_thread::sleep_until(next);
+        }
+        std::cout << "script stopped; the keyboard returns to its effect in a few seconds\n";
+        return 0;
+#else
+        throw std::runtime_error("this mchosectl was built without Lua scripts (MCHOSE_BUILD_SCRIPT=OFF)");
+#endif
     }
     if (sub == "live") {
         if (pos.size() < 3)
