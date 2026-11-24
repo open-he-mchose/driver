@@ -371,3 +371,79 @@ TEST(macro_text_roundtrip)
     }
     CHECK_EQ(format_macro(parse_macro("Ctrl+C", 20)), std::string("+LCtrl 20ms +C 20ms -C 20ms -LCtrl 20ms"));
 }
+
+// Golden values from the reference Python implementation (same encoder as the official driver).
+TEST(dks_masks)
+{
+    struct Case { DksSpans s; std::uint16_t mask; };
+    const Case cases[] = {{{1, 0, 0, 0}, 0x001}, {{0, 1, 0, 0}, 0x008}, {{0, 0, 1, 0}, 0x040}, {{0, 0, 0, 1}, 0x200},
+                          {{1, 1, 1, 1}, 0x249}, {{2, 0, 0, 0}, 0x003}, {{3, 0, 0, 0}, 0x01F}, {{4, 0, 0, 0}, 0x0FF},
+                          {{0, 3, 0, 0}, 0x0F8}, {{0, 2, 2, 0}, 0x0D8}, {{1, 2, 0, 1}, 0x219}};
+    for (const auto& c : cases) {
+        CHECK_EQ(int(dks_mask(c.s)), int(c.mask));
+        CHECK(dks_unmask(c.mask) == c.s);
+    }
+}
+
+// The DKS entry of verification test 14 (W/E/R/T tapped at phases 0/1/2/3, points 1.0 / 3.0 mm).
+TEST(dks_entry_wert)
+{
+    DksEntry d;
+    d.shallow = 10;
+    d.deep = 30;
+    d.actions = {{{0x10, 0, 0x1A}, {1, 0, 0, 0}}, {{0x10, 0, 0x08}, {0, 1, 0, 0}},
+                 {{0x10, 0, 0x15}, {0, 0, 1, 0}}, {{0x10, 0, 0x17}, {0, 0, 0, 1}}};
+    auto e = d.encode();
+    CHECK_EQ(std::vector<std::uint8_t>(e.begin(), e.end()),
+             from_hex("0a 1e 1e 0a 10 00 1a 01 00 10 00 08 08 00 10 00 15 40 00 10 00 17 00 02"));
+    auto back = DksEntry::decode(e);
+    CHECK_EQ(back.actions.size(), std::size_t(4));
+    CHECK(back.actions[2].spans == (DksSpans{0, 0, 1, 0}));
+    d.deep = 5;
+    CHECK_THROWS(d.encode(), std::invalid_argument);
+}
+
+TEST(adv_socd_bind_and_clear)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    const auto snapshot = kb.mem;
+    k.bind_pair(0, 0, AdvKind::Socd, 10, 11, SocdMode::Key1Priority);
+    auto km = k.keymap(0, 0);
+    CHECK(km[10].type == KeyCode::Socd && km[10].code2 == 11);
+    CHECK(km[11].type == KeyCode::Socd && km[11].code2 == 10);
+    auto t = k.triggers(0);
+    CHECK_EQ(int(t[10].priority()), 1);
+    CHECK_EQ(int(t[11].priority()), 2);
+    auto tables = k.adv_tables(0);
+    const int s1 = km[10].code1;
+    CHECK_EQ(int(tables.mt[6 * s1 + 2]), 4 + 10);   // own key first
+    CHECK_EQ(int(tables.mt[6 * s1 + 5]), 4 + 11);   // then the partner
+    std::vector<std::uint8_t> prio;
+    for (const auto& e : t) prio.push_back(e.priority());
+    CHECK(adv_problems(k.adv_bindings(0), tables, prio).empty());
+    CHECK_THROWS(k.bind_toggle(0, 0, 10), SafetyError);   // already bound
+
+    auto cleared = k.clear_adv(0, 0, 11);
+    CHECK_EQ(cleared.size(), std::size_t(2));
+    CHECK(kb.mem == snapshot);                             // keymap, priorities and table back to the start
+}
+
+TEST(adv_modtap_toggle_dks)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    k.bind_mod_tap(0, 0, 20, *parse_keycode("Esc"), *parse_keycode("LCtrl"), 200);
+    CHECK(k.keymap(0, 0)[20] == (KeyCode{KeyCode::ModTap, 0, 20}));
+    k.bind_toggle(0, 1, 21);                               // toggles its own plain key
+    auto tables = k.adv_tables(0);
+    CHECK_EQ(int(tables.tgl[2]), 4 + 21);
+    DksEntry d;
+    d.actions = {{*parse_keycode("W"), {1, 0, 0, 0}}};
+    k.bind_dks(0, 0, 22, d);
+    auto b = k.adv_bindings(0);
+    CHECK_EQ(b.size(), std::size_t(3));
+    CHECK(k.clear_adv(0, 1, 21) == std::vector<int>{21});
+    CHECK(k.keymap(0, 1)[21] == (KeyCode{KeyCode::Keyboard, 0, 0}));   // other layers become transparent
+    CHECK_THROWS(k.bind_mod_tap(0, 0, 23, {}, {}, 5), std::invalid_argument);
+}

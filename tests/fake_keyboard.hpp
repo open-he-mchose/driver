@@ -38,6 +38,8 @@ public:
             for (int base : {0}) {
                 auto& km = mem[cmd::GetKeymap];
                 km[base + 3 * k] = 0x10; km[base + 3 * k + 1] = 0; km[base + 3 * k + 2] = static_cast<std::uint8_t>(4 + k % 40);
+                auto& fk = mem[cmd::GetFactoryKeymap];   // factory layer 0 = the initial layer 0
+                fk[3 * k] = 0x10; fk[3 * k + 1] = 0; fk[3 * k + 2] = static_cast<std::uint8_t>(4 + k % 40);
             }
         mem[cmd::GetColors] = std::vector<std::uint8_t>(2048, 0);
         mem[cmd::GetTrigger] = std::vector<std::uint8_t>(4096, 0);

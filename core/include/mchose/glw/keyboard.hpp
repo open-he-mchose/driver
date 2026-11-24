@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "mchose/glw/advanced.hpp"
 #include "mchose/glw/keycode.hpp"
 #include "mchose/glw/macro.hpp"
 #include "mchose/glw/session.hpp"
@@ -102,6 +103,22 @@ public:
     // Depth stream on/off: sets the FuncConfig debug bit of the active profile (two flash writes).
     void set_depth_stream(bool on);
 
+    // --- advanced keys (https://open-he-mchose.github.io/protocols/glw/advanced-keys/) ---------------
+    std::vector<AdvBinding> adv_bindings(int profile);
+    AdvTables adv_tables(int profile);
+    // Code an advanced function should send for `key`: its layer-0 mapping if that is a plain key,
+    // else the factory code.
+    KeyCode plain_code(int profile, int key);
+    void set_trigger_priority(int profile, int key, std::uint8_t priority);
+    // Each bind_* refuses keys that already have an advanced function in that layer (clear them first).
+    void bind_pair(int profile, int layer, AdvKind kind, int key1, int key2, SocdMode mode = SocdMode::LastInput);
+    void bind_mod_tap(int profile, int layer, int key, const KeyCode& tap, const KeyCode& hold, int hold_ms);
+    void bind_toggle(int profile, int layer, int key, std::optional<KeyCode> code = std::nullopt);
+    void bind_dks(int profile, int layer, int key, const DksEntry& entry);
+    // Remove the advanced function of `key` (and of its partner for pairs). Layer 0 gets the factory code
+    // back, other layers become transparent. Returns the keys that were cleared.
+    std::vector<int> clear_adv(int profile, int layer, int key);
+
     // --- backup / restore ------------------------------------------------------------------------
     KeyboardImage backup(const std::function<void(const std::string&)>& progress = {});
     // Writes only what differs; returns the number of write operations. Never changes the report rate of
@@ -113,6 +130,7 @@ private:
     void count_write(std::size_t n = 1);
     void check_profile(int profile) const;
     void check_key(int key) const;
+    void check_free(const std::vector<AdvBinding>& bindings, int layer, int key);
     void write_verified(std::uint8_t write_cmd, std::uint8_t read_cmd, int offset, std::span<const std::uint8_t> data);
 
     Session session_;

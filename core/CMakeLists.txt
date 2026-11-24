@@ -9,6 +9,8 @@ add_library(mchose_core
   src/macro_text.cpp
   src/model.cpp
   src/keyboard.cpp
+  src/keyboard_adv.cpp
+  src/advanced.cpp
 )
 add_library(mchose::core ALIAS mchose_core)
 target_include_directories(mchose_core PUBLIC

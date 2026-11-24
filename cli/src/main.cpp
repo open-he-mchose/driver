@@ -42,7 +42,7 @@ reading
 
 writing (every write is saved to the keyboard's flash; a full backup is made first)
   profile N                          switch the active profile
-  remap KEY CODE [--layer L]         map KEY (name like CapsLock or matrix index) to CODE
+  remap KEY CODE [--layer L]         map KEY (name like CapsLock, or #INDEX) to CODE
                                      (Esc, Ctrl+Shift+T, Mute, none, or raw hex "10 00 29")
   trigger set KEY... [--actuation MM] [--press MM] [--release MM] [--rt off|on|continuous]
                                      KEY = name, index or "all"
@@ -52,6 +52,14 @@ writing (every write is saved to the keyboard's flash; a full backup is made fir
   macro clear N|all
   macro bind KEY N [--mode once|hold|toggle|COUNT] [--layer L]
                                      hold = repeat while held, toggle = repeat until pressed again
+  adv [show|doctor]                  advanced keys of all profiles (doctor: find broken bindings)
+  adv socd|rs|lt KEY1 KEY2 [--mode last-input|key1|key2|cancel]
+  adv mt KEY --tap X --hold Y [--time MS]
+  adv toggle KEY [--key X]
+  adv dks KEY [--shallow 1.0] [--deep 3.0] --action CODE:ds,de,us,ue [--action ...]
+                                     ds,de,us,ue = phases the action stays held when it starts at
+                                     press-start / bottom / lift-from-bottom / full-lift (0-4,0-3,0-2,0-1)
+  adv clear KEY [--layer L]          remove the function (and the partner of a pair)
   backup [FILE]                      save all profiles, keymaps, triggers, lighting, advanced keys, macros
   restore FILE                       write back what differs from FILE
 
@@ -72,9 +80,18 @@ Close the official web driver first: two programs on the same interface steal ea
 struct Args {
     std::string device;
     std::vector<std::string> pos;
-    std::map<std::string, std::string> opt;   // --name value, or "1" for flags
+    std::map<std::string, std::string> opt;   // --name value, or "1" for flags (last one wins)
+    std::multimap<std::string, std::string> multi;   // every occurrence, for repeatable options
 
     bool flag(const std::string& n) const { return opt.count(n) != 0; }
+    std::vector<std::string> all(const std::string& n) const
+    {
+        std::vector<std::string> v;
+        auto r = multi.equal_range(n);
+        for (auto it = r.first; it != r.second; ++it)
+            v.push_back(it->second);
+        return v;
+    }
     std::string get(const std::string& n, const std::string& def = "") const
     {
         auto it = opt.find(n);
@@ -98,10 +115,13 @@ Args parse_args(int argc, char** argv)
         } else if (s.rfind("--", 0) == 0) {
             if (i + 1 >= argc)
                 throw std::runtime_error("option " + s + " needs a value");
-            if (s == "--device")
+            if (s == "--device") {
                 a.device = argv[++i];
-            else
-                a.opt[s] = argv[++i];
+            } else {
+                a.opt[s] = argv[i + 1];
+                a.multi.emplace(s, argv[i + 1]);
+                ++i;
+            }
         } else {
             a.pos.push_back(s);
         }
@@ -265,16 +285,18 @@ public:
         backed_up_ = true;
     }
 
+    // KEY = a key name of the factory layer 0 ("CapsLock", "1", "F12"), or a matrix index written as "#N".
+    // A plain number is an index only when no key has that name (digits are key names).
     int key_index(const std::string& name)
     {
-        try {
-            int i = to_int(name, "key");
-            if (i >= 0 && i < kb().model().key_slots)
-                return i;
-        } catch (const std::exception&) {
-        }
         if (factory_.empty())
             factory_ = kb().factory_keymap(0);
+        if (!name.empty() && name[0] == '#') {
+            const int i = to_int(name.substr(1), "key index");
+            if (i < 0 || i >= kb().model().keys)
+                throw std::runtime_error("key index out of range: " + name);
+            return i;
+        }
         auto want = parse_keycode(name);
         for (int i = 0; i < kb().model().keys; ++i) {
             if (want && factory_[i] == *want)
@@ -284,7 +306,13 @@ public:
                                                       [](char a, char b) { return std::tolower(a) == std::tolower(b); }))
                 return i;
         }
-        throw std::runtime_error("unknown key '" + name + "' (use a key name such as CapsLock or a matrix index)");
+        try {
+            const int i = to_int(name, "key");
+            if (i >= 0 && i < kb().model().keys)
+                return i;
+        } catch (const std::exception&) {
+        }
+        throw std::runtime_error("unknown key '" + name + "' (use a key name such as CapsLock, or #INDEX)");
     }
 
     std::string key_label(int index)
@@ -588,6 +616,175 @@ int cmd_macro(Tool& t)
     throw std::runtime_error("unknown macro command '" + sub + "'");
 }
 
+std::string describe_adv(Tool& t, const AdvBinding& b, const AdvTables& tables, const std::vector<TriggerEntry>& trig)
+{
+    char head[96];
+    std::snprintf(head, sizeof head, "layer %d  %-12s %-6s slot %2d  ", b.layer, t.key_label(b.key).c_str(), to_string(b.kind), b.slot);
+    std::string s = head;
+    if (b.slot >= kAdvSlots)
+        return s + "(slot out of range!)";
+    auto code_at = [](const std::vector<std::uint8_t>& v, std::size_t off) { return KeyCode{v[off], v[off + 1], v[off + 2]}; };
+    const auto slot = static_cast<std::size_t>(b.slot);
+    switch (b.kind) {
+    case AdvKind::ModTap:
+        return s + "tap " + to_string(code_at(tables.mt, 6 * slot)) + ", hold " + to_string(code_at(tables.mt, 6 * slot + 3)) +
+               " after " + std::to_string(b.code2 * 10) + " ms";
+    case AdvKind::RapidStrike:
+    case AdvKind::Socd:
+    case AdvKind::Lt: {
+        s += "sends " + to_string(code_at(tables.mt, 6 * slot)) + ", partner " +
+             (b.code2 < t.kb().model().keys ? t.key_label(b.code2) : std::string("?")) + " (#" + std::to_string(b.code2) + ")";
+        if (b.kind == AdvKind::Socd)
+            s += ", " + std::string(to_string(static_cast<SocdMode>(trig[static_cast<std::size_t>(b.key)].priority() & 3)));
+        return s;
+    }
+    case AdvKind::Toggle:
+        return s + "toggles " + to_string(code_at(tables.tgl, 3 * slot));
+    case AdvKind::Dks: {
+        auto d = DksEntry::decode(std::span<const std::uint8_t>(tables.dks).subspan(24 * slot, 24));
+        char pts[48];
+        std::snprintf(pts, sizeof pts, "points %.1f / %.1f mm:", d.shallow / 10.0, d.deep / 10.0);
+        s += pts;
+        for (const auto& a : d.actions)
+            s += " " + to_string(a.code) + " " + std::to_string(a.spans.down_start) + "," + std::to_string(a.spans.down_end) +
+                 "," + std::to_string(a.spans.up_start) + "," + std::to_string(a.spans.up_end) + ";";
+        return s;
+    }
+    }
+    return s;
+}
+
+KeyCode parse_target(const std::string& s)
+{
+    auto k = parse_keycode(s);
+    if (!k)
+        throw std::runtime_error("unknown key code '" + s + "'");
+    return *k;
+}
+
+int cmd_adv(Tool& t)
+{
+    const auto& pos = t.args_.pos;
+    auto& kb = t.kb();
+    const std::string sub = pos.size() >= 2 ? pos[1] : "show";
+    if (sub == "show" || sub == "doctor") {
+        std::vector<int> profiles;
+        if (t.args_.opt.count("--profile"))
+            profiles.push_back(t.profile());
+        else
+            for (int p = 0; p < kb.model().profiles; ++p)
+                profiles.push_back(p);
+        const int active = kb.active_profile();
+        int total = 0;
+        for (int p : profiles) {
+            auto bindings = kb.adv_bindings(p);
+            auto tables = kb.adv_tables(p);
+            auto trig = kb.triggers(p);
+            std::cout << "profile " << p << (p == active ? " (active)" : "") << ": " << bindings.size()
+                      << " advanced binding(s)\n";
+            for (const auto& b : bindings)
+                std::cout << "  " << describe_adv(t, b, tables, trig) << "\n";
+            if (sub == "doctor") {
+                std::vector<std::uint8_t> prio;
+                for (const auto& e : trig)
+                    prio.push_back(e.priority());
+                auto problems = adv_problems(bindings, tables, prio);
+                total += static_cast<int>(problems.size());
+                for (const auto& x : problems)
+                    std::cout << "  ! " << x << "\n";
+                auto orphans = adv_orphans(bindings, tables);
+                if (!orphans.empty()) {
+                    std::cout << "  unreferenced table entries (harmless leftovers):";
+                    for (const auto& o : orphans)
+                        std::cout << " " << o;
+                    std::cout << "\n";
+                }
+            }
+        }
+        if (sub == "doctor")
+            std::cout << (total ? std::to_string(total) + " problem(s)" : std::string("no problems found")) << "\n";
+        return 0;
+    }
+    const int p = t.profile();
+    const int layer = to_int(t.args_.get("--layer", "0"), "layer");
+    std::vector<int> keys;
+    for (std::size_t i = 2; i < pos.size(); ++i)
+        keys.push_back(t.key_index(pos[i]));
+    auto need = [&](std::size_t n, const char* usage) {
+        if (keys.size() != n)
+            throw std::runtime_error(std::string("usage: ") + usage);
+    };
+    if (sub == "clear") {
+        need(1, "adv clear KEY [--layer L]");
+        t.before_write();
+        auto cleared = kb.clear_adv(p, layer, keys[0]);
+        if (cleared.empty())
+            std::cout << "no advanced function on that key in layer " << layer << "\n";
+        for (int k : cleared)
+            std::cout << "cleared " << t.key_label(k) << "\n";
+        return 0;
+    }
+    if (sub == "socd" || sub == "rs" || sub == "lt") {
+        need(2, "adv socd|rs|lt KEY1 KEY2 [--mode last-input|key1|key2|cancel] [--layer L]");
+        AdvKind kind = sub == "socd" ? AdvKind::Socd : sub == "rs" ? AdvKind::RapidStrike : AdvKind::Lt;
+        SocdMode mode = SocdMode::LastInput;
+        const std::string m = t.args_.get("--mode", "last-input");
+        if (m == "key1" || m == "key1-priority") mode = SocdMode::Key1Priority;
+        else if (m == "key2" || m == "key2-priority") mode = SocdMode::Key2Priority;
+        else if (m == "cancel") mode = SocdMode::Cancel;
+        else if (m != "last-input" && m != "last") throw std::runtime_error("--mode: last-input, key1, key2 or cancel");
+        t.before_write();
+        kb.bind_pair(p, layer, kind, keys[0], keys[1], mode);
+        if (kind == AdvKind::Socd)
+            std::cout << "note: SOCD output needs the NKRO fix on Linux and does not work on Windows (firmware bug)\n";
+    } else if (sub == "mt") {
+        need(1, "adv mt KEY --tap X --hold Y [--time MS] [--layer L]");
+        if (!t.args_.opt.count("--tap") || !t.args_.opt.count("--hold"))
+            throw std::runtime_error("adv mt needs --tap and --hold");
+        t.before_write();
+        kb.bind_mod_tap(p, layer, keys[0], parse_target(t.args_.get("--tap")), parse_target(t.args_.get("--hold")),
+                        to_int(t.args_.get("--time", "200"), "time"));
+    } else if (sub == "toggle" || sub == "tgl") {
+        need(1, "adv toggle KEY [--key X] [--layer L]");
+        std::optional<KeyCode> code;
+        if (t.args_.opt.count("--key"))
+            code = parse_target(t.args_.get("--key"));
+        t.before_write();
+        kb.bind_toggle(p, layer, keys[0], code);
+    } else if (sub == "dks") {
+        need(1, "adv dks KEY [--shallow MM] [--deep MM] --action CODE:ds,de,us,ue [--action ...]");
+        DksEntry d;
+        d.shallow = static_cast<int>(std::lround(std::stod(t.args_.get("--shallow", "1.0")) * 10));
+        d.deep = static_cast<int>(std::lround(std::stod(t.args_.get("--deep", "3.0")) * 10));
+        for (const auto& spec : t.args_.all("--action")) {
+            const auto colon = spec.rfind(':');
+            if (colon == std::string::npos)
+                throw std::runtime_error("--action needs CODE:ds,de,us,ue, e.g. W:1,0,0,0");
+            DksSpans sp;
+            if (std::sscanf(spec.c_str() + colon + 1, "%d,%d,%d,%d", &sp.down_start, &sp.down_end, &sp.up_start, &sp.up_end) != 4 ||
+                sp.down_start < 0 || sp.down_start > 4 || sp.down_end < 0 || sp.down_end > 3 || sp.up_start < 0 ||
+                sp.up_start > 2 || sp.up_end < 0 || sp.up_end > 1)
+                throw std::runtime_error("DKS spans ds,de,us,ue must be within 0-4,0-3,0-2,0-1");
+            if (!(dks_unmask(dks_mask(sp)) == sp))
+                std::cerr << "warning: spans of " << spec << " are normalised by the keyboard format (same as the official driver)\n";
+            d.actions.push_back({parse_target(spec.substr(0, colon)), sp});
+        }
+        if (d.actions.empty())
+            throw std::runtime_error("adv dks needs at least one --action");
+        t.before_write();
+        kb.bind_dks(p, layer, keys[0], d);
+    } else {
+        throw std::runtime_error("unknown adv command '" + sub + "'");
+    }
+    auto bindings = kb.adv_bindings(p);
+    auto tables = kb.adv_tables(p);
+    auto trig = kb.triggers(p);
+    for (const auto& b : bindings)
+        if (b.layer == layer && std::find(keys.begin(), keys.end(), b.key) != keys.end())
+            std::cout << "set: " << describe_adv(t, b, tables, trig) << "\n";
+    return 0;
+}
+
 int cmd_backup(Tool& t)
 {
     fs::path file = t.args_.pos.size() >= 2 ? fs::path(t.args_.pos[1])
@@ -679,6 +876,7 @@ int main(int argc, char** argv)
         if (c == "light") return cmd_light(t);
         if (c == "macros") return cmd_macros(t);
         if (c == "macro") return cmd_macro(t);
+        if (c == "adv") return cmd_adv(t);
         if (c == "backup") return cmd_backup(t);
         if (c == "restore") return cmd_restore(t);
         if (c == "depth") return cmd_depth(t);
