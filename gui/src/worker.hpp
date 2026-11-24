@@ -8,6 +8,7 @@
 #include <QVariantMap>
 #include <QVector>
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -28,6 +29,7 @@ struct Snapshot {
     QString lightColor;      // "#rrggbb"
     struct Key {
         QString mapping;     // readable name of the layer-0 code
+        bool remapped = false;   // differs from the factory code
         double actuation = 0, rtPress = 0, rtRelease = 0;   // mm
         int mode = 0;        // 0 normal, 1 rapid trigger, 2 continuous
         QString color;       // stored colour "#rrggbb"
@@ -47,7 +49,9 @@ public slots:
     void refresh();
     void switchProfile(int profile);
     void applyTrigger(QVector<int> keys, double actuation, int mode, double press, double release);
-    void remap(int key, QString code);
+    void remap(QVector<int> keys, QString code);         // code as text: "Esc", "Ctrl+C", "Mute", "none" ...
+    void assignFactoryOf(QVector<int> keys, int source); // give keys the factory function of key `source`
+    void resetToFactory(QVector<int> keys);              // factory code of each key (always possible)
     void applyLight(int effect, int brightness, int speed, QString color);
     void backup(QString path);
     void restore(QString path);
@@ -71,6 +75,8 @@ private:
     std::unique_ptr<mchose::hid::HidapiTransport> transport_;
     std::unique_ptr<mchose::glw::Keyboard> kb_;
     std::map<std::array<std::uint8_t, 3>, int> factoryIndex_;   // factory code -> matrix index (depth stream)
+    std::vector<mchose::glw::KeyCode> factory_;                // factory layer 0, by matrix index
+    void setKeys(const QVector<int>& keys, const std::function<mchose::glw::KeyCode(int)>& codeFor);
     QTimer* streamTimer_ = nullptr;
     bool backedUp_ = false;
 };

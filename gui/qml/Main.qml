@@ -88,7 +88,7 @@ ApplicationWindow {
         KeyboardView {
             id: kbd
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.58)
+            Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex === 1 ? "mapping"
                    : tabs.currentIndex === 2 ? "color" : "depth"
             enabled: backend.connected

@@ -16,6 +16,14 @@ using namespace mchose::glw;
 
 namespace {
 
+// Factory codes are those of profile 0; Fn keys (F0 FF layer) carry absolute layer numbers.
+KeyCode forProfile(KeyCode c, int profile)
+{
+    if (c.type == KeyCode::Special && c.code1 == 0xFF && c.code2 < 4)
+        c.code2 = static_cast<std::uint8_t>(c.code2 + 4 * profile);
+    return c;
+}
+
 QString hex_color(std::uint8_t r, std::uint8_t g, std::uint8_t b)
 {
     char buf[8];
@@ -101,9 +109,9 @@ void Worker::connectDevice()
         transport_ = std::make_unique<hid::HidapiTransport>(chosen->path);
         kb_ = std::make_unique<Keyboard>(*transport_, *chosen->model);
         factoryIndex_.clear();
-        auto factory = kb_->factory_keymap(0);
+        factory_ = kb_->factory_keymap(0);
         for (int i = 0; i < kb_->model().keys; ++i)
-            factoryIndex_[factory[static_cast<std::size_t>(i)].bytes()] = i;
+            factoryIndex_[factory_[static_cast<std::size_t>(i)].bytes()] = i;
         backedUp_ = false;
         emit connectedChanged(true, QString::fromStdString(chosen->model->name));
         refresh();
@@ -145,7 +153,7 @@ void Worker::refresh()
             const auto k = static_cast<std::size_t>(i);
             Snapshot::Key key;
             key.mapping = QString::fromStdString(to_string(km[k]));
-            key.actuation = tr[k].actuation() * unit;
+            key.remapped = k < factory_.size() && km[k] != forProfile(factory_[k], s.activeProfile);            key.actuation = tr[k].actuation() * unit;
             key.rtPress = tr[k].rt_press() * unit;
             key.rtRelease = tr[k].rt_release() * unit;
             key.mode = static_cast<int>(tr[k].mode());
@@ -202,14 +210,43 @@ void Worker::applyTrigger(QVector<int> keys, double actuation, int mode, double 
     });
 }
 
-void Worker::remap(int key, QString code)
+void Worker::setKeys(const QVector<int>& keys, const std::function<KeyCode(int)>& codeFor)
 {
-    run(tr("Key remapped"), [&] {
+    autoBackup();
+    const int p = kb_->active_profile();
+    auto current = kb_->keymap(p, 0);
+    for (int k : keys) {
+        const KeyCode c = codeFor(k);
+        if (current[static_cast<std::size_t>(k)] != c)
+            kb_->set_key(p, 0, k, c);
+    }
+}
+
+void Worker::remap(QVector<int> keys, QString code)
+{
+    run(tr("Key mapping written"), [&] {
         auto c = parse_keycode(code.toStdString());
         if (!c)
             throw std::runtime_error("unknown key code '" + code.toStdString() + "'");
-        autoBackup();
-        kb_->set_key(kb_->active_profile(), 0, key, *c);
+        setKeys(keys, [&](int) { return *c; });
+    });
+}
+
+void Worker::assignFactoryOf(QVector<int> keys, int source)
+{
+    run(tr("Key mapping written"), [&] {
+        if (source < 0 || source >= static_cast<int>(factory_.size()))
+            throw std::runtime_error("unknown source key");
+        const KeyCode c = forProfile(factory_[static_cast<std::size_t>(source)], kb_->active_profile());
+        setKeys(keys, [&](int) { return c; });
+    });
+}
+
+void Worker::resetToFactory(QVector<int> keys)
+{
+    run(tr("Default mapping restored"), [&] {
+        const int p = kb_->active_profile();
+        setKeys(keys, [&](int k) { return forProfile(factory_[static_cast<std::size_t>(k)], p); });
     });
 }
 

@@ -71,6 +71,7 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case DepthRole: return k.depth;
     case PressedRole: return k.pressed;
     case SelectedRole: return k.selected;
+    case RemappedRole: return k.settings.remapped;
     default: return {};
     }
 }
@@ -80,7 +81,7 @@ QHash<int, QByteArray> KeyModel::roleNames() const
     return {{IndexRole, "matrixIndex"}, {LabelRole, "label"},    {XRole, "kx"},           {YRole, "ky"},
             {WRole, "kw"},              {MappingRole, "mapping"}, {ActuationRole, "actuation"}, {ModeRole, "mode"},
             {PressRole, "rtPress"},     {ReleaseRole, "rtRelease"}, {ColorRole, "keyColor"}, {DepthRole, "depth"},
-            {PressedRole, "pressed"},   {SelectedRole, "selected"}};
+            {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"}};
 }
 
 void KeyModel::select(int row, bool add)
@@ -129,7 +130,7 @@ QVariantMap KeyModel::firstSelected() const
 {
     for (const auto& k : keys_)
         if (k.selected)
-            return {{"label", QString::fromUtf8(k.cap.label)}, {"mapping", k.settings.mapping},
+            return {{"label", QString::fromUtf8(k.cap.label)}, {"mapping", k.settings.mapping}, {"remapped", k.settings.remapped},
                     {"actuation", k.settings.actuation}, {"mode", k.settings.mode},
                     {"rtPress", k.settings.rtPress}, {"rtRelease", k.settings.rtRelease}, {"color", k.settings.color}};
     return {};

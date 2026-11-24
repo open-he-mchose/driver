@@ -16,7 +16,7 @@ class KeyModel : public QAbstractListModel {
 public:
     enum Role {
         IndexRole = Qt::UserRole + 1, LabelRole, XRole, YRole, WRole, MappingRole, ActuationRole, ModeRole,
-        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole
+        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole, RemappedRole
     };
 
     explicit KeyModel(QObject* parent = nullptr);

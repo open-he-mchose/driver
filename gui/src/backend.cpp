@@ -19,6 +19,8 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doSwitch, worker_, &Worker::switchProfile);
     connect(this, &Backend::doTrigger, worker_, &Worker::applyTrigger);
     connect(this, &Backend::doRemap, worker_, &Worker::remap);
+    connect(this, &Backend::doAssignFactory, worker_, &Worker::assignFactoryOf);
+    connect(this, &Backend::doReset, worker_, &Worker::resetToFactory);
     connect(this, &Backend::doLight, worker_, &Worker::applyLight);
     connect(this, &Backend::doBackup, worker_, &Worker::backup);
     connect(this, &Backend::doRestore, worker_, &Worker::restore);
@@ -91,11 +93,31 @@ void Backend::applyTrigger(double actuation, int mode, double press, double rele
 void Backend::remapSelected(const QString& code)
 {
     const auto sel = keys_.selectedIndices();
-    if (sel.size() != 1) {
-        emit message(tr("Select exactly one key to remap"), true);
+    if (sel.isEmpty()) {
+        emit message(tr("Select the keys to change first (on the keyboard at the top)"), true);
         return;
     }
-    emit doRemap(sel.first(), code);
+    emit doRemap(sel, code);
+}
+
+void Backend::assignFactoryOf(int sourceMatrixIndex)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select the keys to change first (on the keyboard at the top)"), true);
+        return;
+    }
+    emit doAssignFactory(sel, sourceMatrixIndex);
+}
+
+void Backend::resetSelected()
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select the keys to reset first"), true);
+        return;
+    }
+    emit doReset(sel);
 }
 
 void Backend::applyLight(int effect, int brightness, int speed, const QString& color)

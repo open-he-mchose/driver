@@ -6,7 +6,9 @@ import QtQuick.Controls
 
 Item {
     id: root
-    property string overlay: "actuation"   // actuation | mapping | color | depth
+    property string overlay: "actuation"   // actuation | mapping | color | depth | none
+    property bool picker: false               // palette mode: clicking a key emits picked() instead of selecting
+    signal picked(int matrixIndex)
     readonly property real u: Math.min((width - 8) / backend.keys.widthUnits, (height - 8) / backend.keys.heightUnits)
     readonly property real ox: (width - u * backend.keys.widthUnits) / 2   // centre horizontally
     readonly property real maxTravel: 3.4
@@ -22,6 +24,7 @@ Item {
     MouseArea {
         id: band
         anchors.fill: parent
+        enabled: !root.picker
         property point start
         property bool dragging: false
         onPressed: (m) => { start = Qt.point(m.x, m.y); dragging = true; rect.x = m.x; rect.y = m.y; rect.width = 0; rect.height = 0 }
@@ -49,6 +52,7 @@ Item {
         delegate: Item {
             id: key
             required property int index
+            required property int matrixIndex
             required property string label
             required property real kx
             required property real ky
@@ -60,6 +64,7 @@ Item {
             required property real depth
             required property bool pressed
             required property bool selected
+            required property bool remapped
 
             x: root.ox + kx * root.u + 2
             y: 4 + ky * root.u + 2
@@ -71,8 +76,8 @@ Item {
                 anchors.fill: parent
                 radius: 6
                 color: key.pressed ? palette.light : palette.button
-                border.width: key.selected ? 2 : 1
-                border.color: key.selected ? palette.highlight : palette.mid
+                border.width: key.selected && !root.picker ? 2 : 1
+                border.color: key.selected && !root.picker ? palette.highlight : palette.mid
                 clip: true
 
                 // Depth fill (live stream).
@@ -83,7 +88,7 @@ Item {
                     height: parent.height * Math.min(1, key.depth / root.maxTravel)
                     color: palette.highlight
                     opacity: 0.55
-                    visible: key.depth > 0
+                    visible: key.depth > 0 && !root.picker
                 }
                 // Stored colour swatch (lighting tab).
                 Rectangle {
@@ -112,16 +117,21 @@ Item {
                 horizontalAlignment: Text.AlignRight
                 elide: Text.ElideRight
                 font.pixelSize: Math.max(8, root.u * 0.18)
-                color: (root.overlay === "mapping" && key.mapping !== key.label) || (root.overlay === "actuation" && key.mode > 0)
+                color: (root.overlay === "mapping" && key.remapped) || (root.overlay === "actuation" && key.mode > 0)
                        ? palette.highlight : palette.placeholderText
                 text: root.overlay === "actuation" ? key.actuation.toFixed(2)
-                    : root.overlay === "mapping" ? (key.mapping !== key.label ? key.mapping : "")
+                    : root.overlay === "mapping" ? (key.remapped ? key.mapping : "")
                     : root.overlay === "depth" ? (key.depth > 0 ? key.depth.toFixed(2) : "")
                     : ""
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked: (m) => backend.keys.select(key.index, (m.modifiers & Qt.ShiftModifier) || (m.modifiers & Qt.ControlModifier))
+                hoverEnabled: root.picker
+                cursorShape: root.picker ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: (m) => {
+                    if (root.picker) root.picked(key.matrixIndex)
+                    else backend.keys.select(key.index, (m.modifiers & Qt.ShiftModifier) || (m.modifiers & Qt.ControlModifier))
+                }
             }
         }
     }

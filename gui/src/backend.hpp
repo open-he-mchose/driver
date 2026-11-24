@@ -53,6 +53,8 @@ public:
     Q_INVOKABLE void switchProfile(int profile);
     Q_INVOKABLE void applyTrigger(double actuation, int mode, double press, double release);
     Q_INVOKABLE void remapSelected(const QString& code);
+    Q_INVOKABLE void assignFactoryOf(int sourceMatrixIndex);   // picker: the function of that key
+    Q_INVOKABLE void resetSelected();                          // factory mapping
     Q_INVOKABLE void applyLight(int effect, int brightness, int speed, const QString& color);
     Q_INVOKABLE void backup(const QUrl& file);
     Q_INVOKABLE void restore(const QUrl& file);
@@ -70,7 +72,9 @@ signals:
     void doRefresh();
     void doSwitch(int profile);
     void doTrigger(QVector<int> keys, double actuation, int mode, double press, double release);
-    void doRemap(int key, QString code);
+    void doRemap(QVector<int> keys, QString code);
+    void doAssignFactory(QVector<int> keys, int source);
+    void doReset(QVector<int> keys);
     void doLight(int effect, int brightness, int speed, QString color);
     void doBackup(QString path);
     void doRestore(QString path);
