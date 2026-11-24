@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // mchose-gui — configurator for MCHOSE magnetic keyboards (unofficial).
 #include <QGuiApplication>
+#include <QLocale>
+#include <QTranslator>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
@@ -16,6 +18,13 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName("mchose-gui");
     QGuiApplication::setOrganizationName("open-he-mchose");
     QGuiApplication::setApplicationVersion(MCHOSE_VERSION);
+
+    // Translation for the system language (built in when Qt LinguistTools were available); MCHOSE_LANG=en (or ru, ...)
+    // overrides it.
+    QTranslator translator;
+    const QString lang = qEnvironmentVariable("MCHOSE_LANG");
+    if (translator.load(lang.isEmpty() ? QLocale::system() : QLocale(lang), "mchose-gui", "_", ":/i18n"))
+        QGuiApplication::installTranslator(&translator);
 
     Backend backend;
     QQmlApplicationEngine engine;

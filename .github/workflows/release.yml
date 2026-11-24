@@ -90,7 +90,7 @@ jobs:
           cache: true
 
       - name: Configure (GUI; dynamic runtime like Qt, bundled hidapi)
-        run: cmake -S . -B build -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON
+        run: cmake -S . -B build -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DMCHOSE_REQUIRE_TRANSLATIONS=ON -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON
 
       - name: Build
         run: cmake --build build --config Release --target mchose-gui
@@ -153,7 +153,7 @@ jobs:
           cache: true
 
       - name: Configure (bundled hidapi)
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DMCHOSE_REQUIRE_TRANSLATIONS=ON -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON
 
       - name: Build
         run: cmake --build build --target mchose-gui

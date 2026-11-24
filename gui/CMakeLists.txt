@@ -43,5 +43,19 @@ qt_add_resources(mchose-gui "lua_examples"
 target_link_libraries(mchose-gui PRIVATE mchose::core mchose::hid mchose::script mchose::gamepad
   Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
 target_compile_definitions(mchose-gui PRIVATE MCHOSE_VERSION="${PROJECT_VERSION}")
+
+# Translations (Qt Linguist): gui/i18n/*.ts compiled into the binary; the language follows the system
+# (MCHOSE_LANG=en overrides). Update the .ts files with the update_translations target (lupdate).
+find_package(Qt6 6.5 QUIET COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+  qt_add_translations(mchose-gui
+    TS_FILES i18n/mchose-gui_ru.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_OPTIONS -no-obsolete)
+elseif(MCHOSE_REQUIRE_TRANSLATIONS)
+  message(FATAL_ERROR "Qt LinguistTools not found (needed for the translations)")
+else()
+  message(STATUS "Qt LinguistTools not found: mchose-gui is built without translations")
+endif()
 set_target_properties(mchose-gui PROPERTIES WIN32_EXECUTABLE ON)
 install(TARGETS mchose-gui RUNTIME DESTINATION bin)
