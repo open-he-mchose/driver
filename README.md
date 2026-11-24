@@ -92,7 +92,8 @@ function frame(ctx)                      -- ctx.t, ctx.dt, ctx.keys, ctx.pressed
 end
 ```
 
-Helpers: `hsv(h, s, v)`, `mix(a, b, t)`, `clamp(x, lo, hi)`, `ctx.fill(r, g, b)`, `ctx.get(index)`, `print(...)`.
+Parameter fields: `min`, `max`, `default`, `label`, optional `step` (whole steps; `0..1` with `step = 1` is a
+switch in the GUI) and `order` (display order). Helpers: `hsv(h, s, v)`, `mix(a, b, t)`, `clamp(x, lo, hi)`, `ctx.fill(r, g, b)`, `ctx.get(index)`, `print(...)`.
 Key presses come from the operating system (Linux: the keyboard's input devices, readable for members of the
 `input` group; Windows: the system key state), because the keyboard's depth stream pauses while colours are sent.
 Scripts run in a sandbox (no files, no OS access) with instruction and memory limits. Examples in

@@ -78,7 +78,7 @@ public slots:
     void setReportRate(int hz);                       // the keyboard reboots; reconnects afterwards
     void setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
     void paintColors(QVector<int> keys, QString color);
-    void scriptRun(QString source, QString name);   // load and start (25 fps, live colours)
+    void scriptRun(QString source, QString name, QVariantMap values);   // load, apply values, start (25 fps)
     void scriptStop();
     void scriptSetParam(QString name, double value);
     void applyLight(int effect, int brightness, int speed, QString color);

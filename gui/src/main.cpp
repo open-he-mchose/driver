@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
                      Qt::QueuedConnection);
     engine.loadFromModule("MchoseGui", "Main");
 
-    // --screenshot FILE [--tab N] [--layer N] [--select] [--demo-macro TEXT] [--run-example NAME.lua]: render the window, save it as an image and quit (for docs and
+    // --screenshot FILE [--tab N] [--layer N] [--select] [--demo-macro TEXT] [--run-example NAME.lua] [--example NAME.lua]: render the window, save it as an image and quit (for docs and
     // tests; works with QT_QPA_PLATFORM=offscreen).
     const QStringList args = app.arguments();
     const int shot = static_cast<int>(args.indexOf("--screenshot"));
@@ -40,6 +40,13 @@ int main(int argc, char* argv[])
         if (demoArg >= 0 && demoArg + 1 < args.size())
             QTimer::singleShot(2500, &app, [&backend, text = args[demoArg + 1]] { backend.macroEditor()->loadText(text); });
         const int runArg = static_cast<int>(args.indexOf("--run-example"));
+        const int exArg = static_cast<int>(args.indexOf("--example"));
+        if (exArg >= 0 && exArg + 1 < args.size())
+            QTimer::singleShot(300, &app, [&engine, name = args[exArg + 1]] {
+                if (auto* root = engine.rootObjects().value(0))
+                    if (auto* panel = root->findChild<QObject*>("scriptPanel"))
+                        QMetaObject::invokeMethod(panel, "loadExample", Q_ARG(QVariant, name));
+            });
         if (runArg >= 0 && runArg + 1 < args.size())
             QTimer::singleShot(1500, &app, [&backend, name = args[runArg + 1]] { backend.runScript(backend.exampleSource(name), name); });
         if (args.contains("--select"))

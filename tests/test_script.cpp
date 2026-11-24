@@ -183,3 +183,22 @@ TEST(script_typing_speed_bar)
     CHECK(bright(13) < 60);
     CHECK(bright(20) < 60);    // rest of the keyboard dim (background mode 1)
 }
+
+TEST(script_param_step)
+{
+    LightingScript s({{0, "A", 0, 0, 1}}, 8, 1, 1);
+    s.load("params = { mode = { min = 0, max = 2, default = 0.7, step = 1 } }\nfunction frame(ctx) end", "t");
+    CHECK_EQ(s.params().at(0).value, 1.0);
+    CHECK_EQ(s.params().at(0).step, 1.0);
+    s.set_param("mode", 1.6);
+    CHECK_EQ(s.params().at(0).value, 2.0);
+}
+
+TEST(script_param_order)
+{
+    LightingScript s({{0, "A", 0, 0, 1}}, 8, 1, 1);
+    s.load("params = { a = { order = 2 }, b = { order = 1 }, c = {} }\nfunction frame(ctx) end", "t");
+    CHECK_EQ(s.params().at(0).name, std::string("b"));
+    CHECK_EQ(s.params().at(1).name, std::string("a"));
+    CHECK_EQ(s.params().at(2).name, std::string("c"));
+}

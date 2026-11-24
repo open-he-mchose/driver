@@ -509,7 +509,7 @@ void Worker::paintColors(QVector<int> keys, QString color)
     });
 }
 
-void Worker::scriptRun(QString source, QString name)
+void Worker::scriptRun(QString source, QString name, QVariantMap values)
 {
     if (!ready())
         return;
@@ -519,10 +519,12 @@ void Worker::scriptRun(QString source, QString name)
             player_->script().set_print_handler([this](const std::string& l) { emit scriptLog(QString::fromStdString(l), false); });
         }
         player_->load(source.toStdString(), name.toStdString());
+        for (auto it = values.cbegin(); it != values.cend(); ++it)
+            player_->script().set_param(it.key().toStdString(), it.value().toDouble());
         QVariantList params;
         for (const auto& p : player_->script().params())
             params.push_back(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
-                                         {"min", p.min}, {"max", p.max}, {"value", p.value}});
+                                         {"min", p.min}, {"max", p.max}, {"value", p.value}, {"def", p.def}, {"step", p.step}});
         emit scriptParams(params);
         emit scriptLog(tr("%1 started; %2").arg(name, QString::fromStdString(player_->input().status())), false);
         scriptTimer_->start();

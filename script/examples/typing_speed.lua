@@ -1,12 +1,13 @@
 -- Typing speedometer on the top row (Esc, F1-F12, ...): the row fills from left to right as you type
 -- faster, green -> yellow -> red, with a white peak marker that slowly falls back.
 -- Speed in words per minute (1 word = 5 key presses), measured over a sliding window.
+-- order = display order in the GUI; step = 1 gives whole numbers (0..1 with step 1 is a switch).
 params = {
-  max_wpm    = { min = 30, max = 250, default = 120, label = "WPM for a full bar" },
-  window     = { min = 1, max = 10, default = 3, label = "Measuring window (s)" },
-  smoothing  = { min = 0, max = 0.95, default = 0.6, label = "Smoothing" },
-  peak       = { min = 0, max = 1, default = 1, label = "Peak marker (0 = off)" },
-  background = { min = 0, max = 2, default = 1, label = "Rest of keyboard: 0 off, 1 dim, 2 speed tint" },
+  max_wpm    = { order = 1, min = 30, max = 250, default = 120, step = 5, label = "WPM for a full bar" },
+  window     = { order = 2, min = 1, max = 10, default = 3, label = "Measuring window (s)" },
+  smoothing  = { order = 3, min = 0, max = 0.95, default = 0.6, label = "Smoothing" },
+  peak       = { order = 4, min = 0, max = 1, default = 1, step = 1, label = "Peak marker" },
+  background = { order = 5, min = 0, max = 2, default = 1, step = 1, label = "Background: off/dim/tint" },
 }
 
 local presses = {}     -- times of recent key presses

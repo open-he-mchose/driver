@@ -5,6 +5,7 @@
 #include <QFile>
 
 #include "mchose/glw/advanced.hpp"
+#include "mchose/script/lighting_script.hpp"
 #include "mchose/model.hpp"
 
 Backend::Backend(QObject* parent) : QObject(parent)
@@ -324,6 +325,26 @@ bool Backend::writeTextFile(const QUrl& file, const QString& text)
     return true;
 }
 
-void Backend::runScript(const QString& source, const QString& name) { emit doScriptRun(source, name); }
+void Backend::runScript(const QString& source, const QString& name, const QVariantMap& values)
+{
+    emit doScriptRun(source, name, values);
+}
+
+void Backend::previewParams(const QString& source)
+{
+    QVariantList params;
+    try {
+        mchose::script::LightingScript s({}, 128, 1, 1);
+        s.set_instruction_limit(2'000'000);
+        s.load(source.toStdString(), "preview");
+        for (const auto& p : s.params())
+            params.push_back(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
+                                         {"min", p.min}, {"max", p.max}, {"value", p.value}, {"def", p.def}, {"step", p.step}});
+    } catch (const std::exception&) {
+        // errors are reported when the script is run
+    }
+    scriptParams_ = params;
+    emit scriptParamsChanged();
+}
 void Backend::stopScript() { emit doScriptStop(); }
 void Backend::setScriptParam(const QString& name, double value) { emit doScriptParam(name, value); }

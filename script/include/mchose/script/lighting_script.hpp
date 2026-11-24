@@ -49,6 +49,8 @@ struct FrameInput {
 struct Param {
     std::string name, label;
     double min = 0, max = 1, value = 0, def = 0;
+    double step = 0;   // 0 = continuous; values are rounded to min + k*step
+    double order = 1e9;   // display order (ascending, then by name)
 };
 
 using Rgb = std::array<std::uint8_t, 3>;

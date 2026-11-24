@@ -232,6 +232,17 @@ void LightingScript::call(const char* function, bool optional)
     lua_settop(L, base - 1);
 }
 
+namespace {
+double snap(const Param& p, double v)
+{
+    const double lo = std::min(p.min, p.max), hi = std::max(p.min, p.max);
+    v = std::clamp(v, lo, hi);
+    if (p.step > 0)
+        v = std::clamp(lo + std::round((v - lo) / p.step) * p.step, lo, hi);
+    return v;
+}
+}  // namespace
+
 void LightingScript::load(const std::string& source, const std::string& name)
 {
     loaded_ = false;
@@ -313,15 +324,20 @@ void LightingScript::load(const std::string& source, const std::string& name)
                 p.def = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : p.min;
                 lua_getfield(L, -4, "label");
                 p.label = lua_isstring(L, -1) ? lua_tostring(L, -1) : p.name;
-                lua_pop(L, 4);
-                p.value = std::clamp(p.def, std::min(p.min, p.max), std::max(p.min, p.max));
+                lua_getfield(L, -5, "step");
+                p.step = lua_isnumber(L, -1) ? std::max(0.0, static_cast<double>(lua_tonumber(L, -1))) : 0;
+                lua_getfield(L, -6, "order");
+                if (lua_isnumber(L, -1))
+                    p.order = lua_tonumber(L, -1);
+                lua_pop(L, 6);
+                p.value = snap(p, p.def);
                 params_.push_back(p);
             }
             lua_pop(L, 1);
         }
     }
     lua_pop(L, 1);
-    std::sort(params_.begin(), params_.end(), [](const Param& a, const Param& b) { return a.name < b.name; });
+    std::sort(params_.begin(), params_.end(), [](const Param& a, const Param& b) { return a.order != b.order ? a.order < b.order : a.name < b.name; });
     lua_rawgeti(L, LUA_REGISTRYINDEX, state_->ctx_ref);
     lua_getfield(L, -1, "param");
     for (const auto& p : params_) {
@@ -372,7 +388,7 @@ void LightingScript::set_param(const std::string& name, double value)
 {
     for (auto& p : params_)
         if (p.name == name) {
-            p.value = std::clamp(value, std::min(p.min, p.max), std::max(p.min, p.max));
+            p.value = snap(p, value);
             if (state_ && state_->L) {
                 lua_State* L = state_->L;
                 lua_rawgeti(L, LUA_REGISTRYINDEX, state_->ctx_ref);

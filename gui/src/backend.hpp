@@ -103,7 +103,8 @@ public:
     Q_INVOKABLE QString exampleSource(const QString& name) const;
     Q_INVOKABLE QString readTextFile(const QUrl& file);
     Q_INVOKABLE bool writeTextFile(const QUrl& file, const QString& text);
-    Q_INVOKABLE void runScript(const QString& source, const QString& name);
+    Q_INVOKABLE void runScript(const QString& source, const QString& name, const QVariantMap& values = {});
+    Q_INVOKABLE void previewParams(const QString& source);   // parameters of a script before it runs
     Q_INVOKABLE void stopScript();
     Q_INVOKABLE void setScriptParam(const QString& name, double value);
     // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
@@ -143,7 +144,7 @@ signals:
     void doReportRate(int hz);
     void doSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
     void doPaint(QVector<int> keys, QString color);
-    void doScriptRun(QString source, QString name);
+    void doScriptRun(QString source, QString name, QVariantMap values);
     void doScriptStop();
     void doScriptParam(QString name, double value);
 
