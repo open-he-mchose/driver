@@ -87,6 +87,7 @@ Pane {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 picker: true
+                base: ApplicationWindow.window ? ApplicationWindow.window.color : palette.window
                 overlay: "none"
                 enabled: panel.canWrite
                 opacity: panel.canWrite ? 1 : 0.5

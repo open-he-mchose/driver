@@ -47,17 +47,10 @@ ApplicationWindow {
                     flat: true
                     implicitWidth: 44
                     font.bold: backend.activeProfile === index
-                    contentItem: Label {
-                        text: parent.text
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        color: backend.activeProfile === index ? palette.highlightedText : palette.buttonText
-                    }
                     background: Rectangle {
                         radius: 4
-                        color: backend.activeProfile === index ? palette.highlight : "transparent"
-                        border.color: backend.activeProfile === index ? palette.highlight : palette.mid
+                        color: backend.activeProfile === index ? Qt.rgba(0.5, 0.5, 0.5, 0.35) : "transparent"
+                        border.color: backend.activeProfile === index ? palette.highlight : Qt.rgba(0.5, 0.5, 0.5, 0.4)
                     }
                     ToolTip.visible: hovered
                     ToolTip.text: backend.rotation.indexOf(index) >= 0
@@ -87,6 +80,7 @@ ApplicationWindow {
 
         KeyboardView {
             id: kbd
+            base: win.color
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex === 1 ? "mapping"

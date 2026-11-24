@@ -10,6 +10,8 @@
 #include <QQuickWindow>
 #include <QTimer>
 
+#include <cstring>
+
 #include "backend.hpp"
 
 namespace {
@@ -32,6 +34,22 @@ bool qml_module_installed(const QString& uri)
 
 int main(int argc, char* argv[])
 {
+    // Take --style NAME out of argv before QApplication sees it: QApplication treats it as a Qt Widgets
+    // style and swallows it.
+    QString cliStyle;
+    {
+        int out = 1;
+        for (int i = 1; i < argc; ++i) {
+            if (std::strcmp(argv[i], "--style") == 0 && i + 1 < argc)
+                cliStyle = QString::fromLocal8Bit(argv[++i]);
+            else if (std::strncmp(argv[i], "--style=", 8) == 0)
+                cliStyle = QString::fromLocal8Bit(argv[i] + 8);
+            else
+                argv[out++] = argv[i];
+        }
+        argc = out;
+        argv[argc] = nullptr;
+    }
     // QApplication (not QGuiApplication): the desktop style draws controls with the system QStyle.
     QApplication app(argc, argv);
     QApplication::setApplicationName("mchose-gui");
@@ -42,9 +60,7 @@ int main(int argc, char* argv[])
     // platform default (Fusion with the system palette, e.g. from qt6ct, on Linux; the native style on
     // Windows). Outside Plasma the desktop style takes its colours from kdeglobals, not from qt6ct, and can
     // clash with the palette, so it is only used there on request (--style org.kde.desktop).
-    const QStringList a = QCoreApplication::arguments();
-    const int styleArg = static_cast<int>(a.indexOf("--style"));
-    QString style = styleArg >= 0 && styleArg + 1 < a.size() ? a[styleArg + 1] : qEnvironmentVariable("QT_QUICK_CONTROLS_STYLE");
+    QString style = !cliStyle.isEmpty() ? cliStyle : qEnvironmentVariable("QT_QUICK_CONTROLS_STYLE");
 #ifdef Q_OS_LINUX
     if (style.isEmpty())
         style = qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("KDE", Qt::CaseInsensitive) &&
@@ -59,6 +75,11 @@ int main(int argc, char* argv[])
     }
     if (!style.isEmpty())
         QQuickStyle::setStyle(style);
+    // Material / Universal: follow the system light / dark scheme unless their theme variable is set.
+    if (style.compare("Material", Qt::CaseInsensitive) == 0 && qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_MATERIAL_THEME"))
+        qputenv("QT_QUICK_CONTROLS_MATERIAL_THEME", "System");
+    if (style.compare("Universal", Qt::CaseInsensitive) == 0 && qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_UNIVERSAL_THEME"))
+        qputenv("QT_QUICK_CONTROLS_UNIVERSAL_THEME", "System");
 
     Backend backend;
     QQmlApplicationEngine engine;
