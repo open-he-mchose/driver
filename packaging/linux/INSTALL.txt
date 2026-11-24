@@ -1,4 +1,4 @@
-mchosectl for Linux (x86_64)
+mchosectl and mchose-gui for Linux (x86_64)
 
 1. Allow your user to access the keyboard (once):
 
@@ -10,9 +10,20 @@ mchosectl for Linux (x86_64)
 
 2. Run it:
 
-     ./mchosectl info
+     ./mchosectl info                              (command line)
+     chmod +x mchose-gui-*.AppImage && ./mchose-gui-*.AppImage    (graphical configurator)
 
-   Optionally copy it to a directory in your PATH:  sudo install -m755 mchosectl /usr/local/bin/
+   Optionally copy mchosectl to a directory in your PATH:  sudo install -m755 mchosectl /usr/local/bin/
+
+3. Optional, for the virtual gamepad (mchose-gui Gamepad tab, mchosectl gamepad): allow creating it
+   (many distributions already allow this, e.g. for Steam):
+
+     sudo cp 72-mchose-uinput.rules /etc/udev/rules.d/
+     sudo modprobe uinput
+     sudo udevadm control --reload && sudo udevadm trigger --name-match=uinput
+
+4. Optional, for Lua lighting effects that react to key presses: read access to the keyboard's input
+   devices (membership in the 'input' group on most distributions).
 
 Requirements: glibc 2.35 or newer, libudev (part of every systemd / eudev system).
-Close the official web driver while using mchosectl.
+Close the official web driver while using these tools; only one of them may use the keyboard at a time.

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Push a tag "vX.Y.Z" (matching the version in CMakeLists.txt) to build mchosectl for Linux and Windows and
-# mchose-gui for Windows, and publish a GitHub release with the notes of that version from CHANGELOG.md.
+# mchose-gui for Windows and Linux (AppImage), and publish a GitHub release with the notes of that version from CHANGELOG.md.
 name: release
 
 on:
@@ -59,7 +59,7 @@ jobs:
             7z a "$d.zip" "$d" > /dev/null
             echo "ASSET=$d.zip" >> "$GITHUB_ENV"
           else
-            cp build/cli/mchosectl packaging/linux/70-mchose-hidraw.rules packaging/linux/INSTALL.txt "$d"/
+            cp build/cli/mchosectl packaging/linux/70-mchose-hidraw.rules packaging/linux/72-mchose-uinput.rules packaging/linux/INSTALL.txt "$d"/
             strip "$d/mchosectl"
             tar czf "$d.tar.gz" "$d"
             echo "ASSET=$d.tar.gz" >> "$GITHUB_ENV"
@@ -128,8 +128,55 @@ jobs:
           name: gui-windows-x64
           path: ${{ env.ASSET }}
 
+  gui-linux:
+    runs-on: ubuntu-22.04        # older glibc: the AppImage runs on most current distributions
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check that the tag matches the project version
+        run: |
+          v=$(sed -n 's/^project(mchose-driver VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version v$v"; exit 1; }
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libudev-dev libgl1-mesa-dev libegl1 libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libwayland-client0 libwayland-cursor0 libwayland-egl1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          cache: true
+
+      - name: Configure (bundled hidapi)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
+
+      - name: Build
+        run: cmake --build build --target mchose-gui
+
+      - name: AppImage
+        run: QMAKE="$QT_ROOT_DIR/bin/qmake" packaging/linux/make-appimage.sh build "$VERSION" dist
+
+      - name: Smoke test (starts and renders offscreen)
+        run: |
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 timeout 120 "dist/mchose-gui-$VERSION-x86_64.AppImage" --screenshot shot.png --tab 6
+          test -s shot.png
+
+      - name: udev rules and install notes next to the AppImage
+        run: |
+          cp packaging/linux/70-mchose-hidraw.rules packaging/linux/72-mchose-uinput.rules packaging/linux/INSTALL.txt dist/
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: gui-linux-x86_64
+          path: dist/*
+
   publish:
-    needs: [build, gui-windows]
+    needs: [build, gui-windows, gui-linux]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

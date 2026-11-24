@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=MCHOSE configurator
+GenericName=Keyboard configurator
+Comment=Configure MCHOSE magnetic keyboards (unofficial, open source)
+Exec=mchose-gui
+Icon=mchose-gui
+Categories=Settings;HardwareSettings;
+Keywords=keyboard;hall effect;rapid trigger;lighting;
+Terminal=false

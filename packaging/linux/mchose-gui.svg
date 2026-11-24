@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- SPDX-License-Identifier: MIT -->
+  <rect x="16" y="16" width="224" height="224" rx="40" fill="#2b2f36"/>
+  <rect x="40" y="36" width="176" height="164" rx="28" fill="#4a505a"/>
+  <rect x="56" y="48" width="144" height="120" rx="20" fill="#6b727e"/>
+  <path d="M128 72 v72 M104 120 l24 24 l24 -24" stroke="#f4c542" stroke-width="14" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="64" y="208" width="128" height="10" rx="5" fill="#f4c542"/>
+</svg>
