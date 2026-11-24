@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Push a tag "vX.Y.Z" (matching the version in CMakeLists.txt) to build mchosectl for Linux and Windows and
-# publish a GitHub release with the notes of that version from CHANGELOG.md.
+# mchose-gui for Windows, and publish a GitHub release with the notes of that version from CHANGELOG.md.
 name: release
 
 on:
@@ -70,8 +70,66 @@ jobs:
           name: ${{ matrix.name }}
           path: ${{ env.ASSET }}
 
+  gui-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check that the tag matches the project version
+        shell: bash
+        run: |
+          v=$(sed -n 's/^project(mchose-driver VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version v$v"; exit 1; }
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configure (GUI; dynamic runtime like Qt, bundled hidapi)
+        run: cmake -S . -B build -DMCHOSE_BUILD_GUI=ON -DMCHOSE_BUILD_TESTS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_hidapi=ON
+
+      - name: Build
+        run: cmake --build build --config Release --target mchose-gui
+
+      - name: Package (windeployqt)
+        shell: bash
+        run: |
+          d=mchose-gui-$VERSION-windows-x64
+          mkdir "$d"
+          cp build/gui/Release/mchose-gui.exe "$d"/
+          windeployqt --release --qmldir gui/qml --no-translations --no-system-d3d-compiler --no-opengl-sw "$d/mchose-gui.exe"
+          for f in msvcp140.dll msvcp140_1.dll msvcp140_2.dll vcruntime140.dll vcruntime140_1.dll; do
+            cp "/c/Windows/System32/$f" "$d"/
+          done
+          cp gui/LICENSE "$d/LICENSE-GPL-3.0.txt"
+          cp packaging/windows/README.txt packaging/windows/THIRD-PARTY.txt CHANGELOG.md "$d"/
+          echo "PKG=$d" >> "$GITHUB_ENV"
+
+      - name: Smoke test (the packaged app starts and renders offscreen)
+        shell: bash
+        run: |
+          cp "$QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" "$PKG/platforms/"
+          QT_QPA_PLATFORM=offscreen timeout 120 "$PKG/mchose-gui.exe" --screenshot shot.png --tab 5
+          rm "$PKG/platforms/qoffscreen.dll"
+          test -s shot.png
+
+      - name: Zip
+        shell: bash
+        run: |
+          7z a "$PKG.zip" "$PKG" > /dev/null
+          echo "ASSET=$PKG.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: gui-windows-x64
+          path: ${{ env.ASSET }}
+
   publish:
-    needs: build
+    needs: [build, gui-windows]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -91,4 +149,4 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "mchosectl $GITHUB_REF_NAME" --notes-file notes.md
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "open-he-mchose driver $GITHUB_REF_NAME" --notes-file notes.md

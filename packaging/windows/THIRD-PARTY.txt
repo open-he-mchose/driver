@@ -1,0 +1,14 @@
+mchose-gui for Windows (x64)
+
+mchose-gui is free software under the GNU General Public License v3 (LICENSE-GPL-3.0.txt).
+Source code: https://github.com/open-he-mchose/driver (the tag of this release).
+
+This package contains third-party components:
+
+- Qt 6 (https://www.qt.io/), used under the GNU Lesser General Public License v3; the Qt libraries are
+  dynamically linked DLLs and can be replaced. Qt source code: https://download.qt.io/official_releases/qt/
+- hidapi (https://github.com/libusb/hidapi), BSD-style licence (statically linked).
+- Lua 5.4 (https://www.lua.org/), MIT licence (statically linked).
+- Microsoft Visual C++ runtime DLLs (redistributable files of Visual Studio).
+
+Unofficial: not affiliated with or endorsed by MCHOSE. Parts of this project were written with AI assistance.

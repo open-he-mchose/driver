@@ -16,9 +16,10 @@ at <https://open-he-mchose.github.io/>; the firmware is not modified.
 | `script/` | Lua 5.4 lighting effects: sandboxed scripts, key presses from the OS, live colours | core, Lua (downloaded) |
 | `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, script, Qt 6.5+ |
 
-`gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0, early): visual keyboard, actuation and rapid trigger,
-remapping, lighting, live key depth, backup / restore. Build it with `-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with
-Qt Quick and Quick Controls 2). It uses the system look: the platform's default
+`gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0): visual keyboard, actuation and rapid trigger, keymap
+of all layers, macros, advanced keys, lighting and per-key colours, Lua effects, profiles and settings, live key
+depth, backup / restore. Windows packages are on the releases page; elsewhere build it with `-DMCHOSE_BUILD_GUI=ON`
+(needs Qt 6.5+ with Qt Quick and Quick Controls 2). It uses the system look: the platform's default
 Qt Quick Controls style and the system palette, no colours of its own. `core`, `hid` and `cli` stay MIT.
 
 ## Supported keyboards
@@ -127,9 +128,10 @@ CI builds for Linux and Windows are attached to every run of the `build` workflo
 
 Done and tested on a Jet75-II: info, profiles (switch, rotation, copy), report rate, lighting (effects,
 stored and live colours), trigger settings, keymap, macros, advanced keys (DKS, Toggle, Mod-Tap, RS, SOCD, LT,
-doctor), backup / restore, depth stream, safety guards; unit tests and Linux / Windows CI.
+doctor), backup / restore, depth stream, safety guards, Lua lighting effects, the Qt GUI; unit tests and
+Linux / Windows CI; releases.
 
-Next: releases, precise depth from travel curves, more models, then the Qt GUI.
+Next: Linux AppImage of the GUI, depth graph, Russian translation, precise depth from travel curves, more models.
 
 ## License
 
