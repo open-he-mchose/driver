@@ -14,12 +14,14 @@ at <https://open-he-mchose.github.io/>; the firmware is not modified.
 | `cli/` | `mchosectl` | core, hid |
 | `tests/` | unit tests with a simulated keyboard; golden values from the documentation | core |
 | `script/` | Lua 5.4 lighting effects: sandboxed scripts, key presses from the OS, live colours | core, Lua (downloaded) |
-| `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, script, Qt 6.5+ |
+| `gamepad/` | analog keys as a virtual Xbox 360 controller (Linux uinput, Windows ViGEmBus) | ViGEmClient on Windows (downloaded) |
+| `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, script, gamepad, Qt 6.5+ |
 
 `gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0): visual keyboard, actuation and rapid trigger, keymap
-of all layers, macros, advanced keys, lighting and per-key colours, Lua effects, profiles and settings, live key
-depth, backup / restore. Windows packages are on the releases page; elsewhere build it with `-DMCHOSE_BUILD_GUI=ON`
-(needs Qt 6.5+ with Qt Quick and Quick Controls 2). It uses the system look: the platform's default
+of all layers, macros, advanced keys, lighting and per-key colours, Lua effects, virtual gamepad, profiles and
+settings, live key depth with a depth graph, backup / restore; English and Russian (follows the system language,
+`MCHOSE_LANG=en` overrides it). Packages: Windows zip and Linux AppImage on the releases page; or build it with
+`-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with Qt Quick and Quick Controls 2; Qt LinguistTools for the translation). It uses the system look: the platform's default
 Qt Quick Controls style and the system palette, no colours of its own. `core`, `hid` and `cli` stay MIT.
 
 ## Supported keyboards
@@ -31,8 +33,8 @@ Qt Quick Controls style and the system palette, no colours of its own. `core`, `
 
 ## Download
 
-Prebuilt `mchosectl` for Linux (x86_64) and Windows (x64): [Releases](https://github.com/open-he-mchose/driver/releases).
-No installation needed. On Linux, install the udev rule from the archive (see `INSTALL.txt`) or
+Prebuilt `mchosectl` and `mchose-gui` for Linux (x86_64, GUI as AppImage) and Windows (x64):
+[Releases](https://github.com/open-he-mchose/driver/releases). No installation needed. On Linux, install the udev rule from the archive (see `INSTALL.txt`) or
 [linux-fixes](https://github.com/open-he-mchose/linux-fixes). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## mchosectl
@@ -101,6 +103,38 @@ Scripts run in a sandbox (no files, no OS access) with instruction and memory li
 [`script/examples`](script/examples): rainbow wave, typing ripple, heat map, fire, rain, Game of Life. In the GUI:
 the Effects tab (editor, parameters as sliders, live preview on the on-screen keyboard).
 
+## Virtual gamepad
+
+The keyboard has no gamepad mode, so the software reads the live depth stream and feeds a virtual Xbox 360
+controller: key travel becomes stick axes and triggers, keys become buttons.
+
+```text
+mchosectl gamepad --presets                 wasd-left-stick, racing
+mchosectl gamepad --preset racing --show    W = throttle, S = brake, A / D = steering
+mchosectl gamepad --map my-game.txt
+```
+
+A mapping is plain text, one `KEY = TARGET` per line (key names of the factory layout, or `#INDEX`), plus the
+travel settings:
+
+```text
+W = left-up          # targets: left-/right-up/down/left/right, lt, rt, a, b, x, y, lb, rb,
+A = left-left        #          back, start, guide, l3, r3, dpad-up/down/left/right
+Space = a
+deadzone = 0.3       # mm ignored at the top of the stroke
+full = 3.0           # mm for the full analog value
+button = 1.2         # mm at which a button counts as pressed
+```
+
+In the GUI: the Gamepad tab (presets, map the selected keys, travel sliders, live sticks and triggers).
+
+- **Linux:** uses `/dev/uinput`; install `packaging/linux/72-mchose-uinput.rules` if your user may not create
+  input devices (many distributions already allow it, e.g. for Steam).
+- **Windows:** needs the [ViGEmBus](https://github.com/nefarius/ViGEmBus/releases) driver installed.
+- The mapped keys still type on the keyboard: disable them in a gaming profile (the Gamepad tab can do it).
+- The gamepad and Lua effects cannot run together: the firmware pauses the depth stream for ~0.6 s after every
+  packet from the computer, and live colours are sent constantly.
+
 ## Build
 
 Requirements: CMake ≥ 3.21, a C++20 compiler (GCC 11+, Clang 14+, MSVC 2022), hidapi. If hidapi is not
@@ -129,9 +163,9 @@ CI builds for Linux and Windows are attached to every run of the `build` workflo
 Done and tested on a Jet75-II: info, profiles (switch, rotation, copy), report rate, lighting (effects,
 stored and live colours), trigger settings, keymap, macros, advanced keys (DKS, Toggle, Mod-Tap, RS, SOCD, LT,
 doctor), backup / restore, depth stream, safety guards, Lua lighting effects, the Qt GUI; unit tests and
-Linux / Windows CI; releases.
+Linux / Windows CI; releases; Linux AppImage; depth graph; virtual gamepad; Russian translation.
 
-Next: Linux AppImage of the GUI, depth graph, Russian translation, precise depth from travel curves, more models.
+Next: switch calibration, precise depth from travel curves, more models.
 
 ## License
 

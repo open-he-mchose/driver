@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 (2026-11-25)
+
+- **Virtual gamepad**: analog keys as an Xbox 360 controller (key travel → sticks and triggers, keys → buttons),
+  in the GUI (Gamepad tab: presets, map selected keys, travel settings, live view, disable the mapped keys in the
+  base layer) and as `mchosectl gamepad`. Linux: uinput (`72-mchose-uinput.rules`); Windows: needs ViGEmBus.
+  Presets `wasd-left-stick` and `racing`
+- **Depth graph** on the Actuation tab: travel of the selected (or last pressed) key over 4 s with the actuation
+  point and the time the keyboard reports the key pressed
+- **Linux AppImage** of `mchose-gui` (X11 and Wayland), with the udev rules and install notes
+- **Russian translation** of the GUI (follows the system language; `MCHOSE_LANG=en` overrides it)
+- Key depth without the release lag (the firmware's travel field freezes when a key settles; a sample with the
+  sensor at rest now counts as 0)
+
 ## 0.2.1 (2026-11-25)
 
 - GUI: the keyboard has a fixed size (no longer changes with the window or the tab); the key picker on the Keymap
