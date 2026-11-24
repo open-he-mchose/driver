@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
 
+#include <QDir>
+#include <QFile>
+
 #include "mchose/glw/advanced.hpp"
 #include "mchose/model.hpp"
 
@@ -38,6 +41,21 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doReportRate, worker_, &Worker::setReportRate);
     connect(this, &Backend::doSettings, worker_, &Worker::setSettings);
     connect(this, &Backend::doPaint, worker_, &Worker::paintColors);
+    connect(this, &Backend::doScriptRun, worker_, &Worker::scriptRun);
+    connect(this, &Backend::doScriptStop, worker_, &Worker::scriptStop);
+    connect(this, &Backend::doScriptParam, worker_, &Worker::scriptSetParam);
+    connect(worker_, &Worker::scriptRunningChanged, this, [this](bool on) {
+        scriptRunning_ = on;
+        if (!on)
+            keys_.setLiveColors({});
+        emit scriptRunningChanged();
+    });
+    connect(worker_, &Worker::scriptParams, this, [this](const QVariantList& p) {
+        scriptParams_ = p;
+        emit scriptParamsChanged();
+    });
+    connect(worker_, &Worker::scriptLog, this, &Backend::scriptLog);
+    connect(worker_, &Worker::scriptColors, this, [this](const QByteArray& rgb) { keys_.setLiveColors(rgb); });
     connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
 
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
@@ -68,6 +86,8 @@ Backend::Backend(QObject* parent) : QObject(parent)
 
 Backend::~Backend()
 {
+    if (scriptRunning_)
+        QMetaObject::invokeMethod(worker_, "scriptStop", Qt::BlockingQueuedConnection);
     if (streaming_)
         QMetaObject::invokeMethod(worker_, "setStreaming", Qt::BlockingQueuedConnection, Q_ARG(bool, false));
     thread_.quit();
@@ -270,3 +290,40 @@ void Backend::paintSelected(const QString& color)
     }
     emit doPaint(sel, color);
 }
+
+QStringList Backend::scriptExamples() const
+{
+    QStringList l = QDir(":/examples").entryList({"*.lua"}, QDir::Files, QDir::Name);
+    return l;
+}
+
+QString Backend::exampleSource(const QString& name) const
+{
+    QFile f(":/examples/" + name);
+    return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+}
+
+QString Backend::readTextFile(const QUrl& file)
+{
+    QFile f(file.toLocalFile());
+    if (!f.open(QIODevice::ReadOnly)) {
+        emit message(tr("Cannot read %1").arg(file.toLocalFile()), true);
+        return {};
+    }
+    return QString::fromUtf8(f.readAll());
+}
+
+bool Backend::writeTextFile(const QUrl& file, const QString& text)
+{
+    QFile f(file.toLocalFile());
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(text.toUtf8()) < 0) {
+        emit message(tr("Cannot write %1").arg(file.toLocalFile()), true);
+        return false;
+    }
+    emit message(tr("Saved %1").arg(file.toLocalFile()), false);
+    return true;
+}
+
+void Backend::runScript(const QString& source, const QString& name) { emit doScriptRun(source, name); }
+void Backend::stopScript() { emit doScriptStop(); }
+void Backend::setScriptParam(const QString& name, double value) { emit doScriptParam(name, value); }

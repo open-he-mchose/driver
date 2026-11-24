@@ -83,7 +83,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
-                   : tabs.currentIndex === 4 ? "color" : "depth"
+                   : tabs.currentIndex === 4 ? "color" : tabs.currentIndex === 5 ? "none" : "depth"
             enabled: backend.connected
             opacity: backend.connected ? 1 : 0.4
         }
@@ -101,6 +101,7 @@ ApplicationWindow {
                 TabButton { text: qsTr("Macros") }
                 TabButton { text: qsTr("Advanced") }
                 TabButton { text: qsTr("Lighting") }
+                TabButton { text: qsTr("Effects") }
                 TabButton { text: qsTr("Device") }
             }
             Label {
@@ -126,6 +127,7 @@ ApplicationWindow {
             MacroPanel {}
             AdvancedPanel {}
             LightingPanel {}
+            ScriptPanel {}
             DevicePanel {}
         }
     }

@@ -51,6 +51,10 @@ Worker::Worker()
     streamTimer_ = new QTimer(this);
     streamTimer_->setInterval(5);
     connect(streamTimer_, &QTimer::timeout, this, &Worker::pollStream);
+    scriptTimer_ = new QTimer(this);
+    scriptTimer_->setInterval(40);   // 25 frames per second
+    scriptTimer_->setTimerType(Qt::PreciseTimer);
+    connect(scriptTimer_, &QTimer::timeout, this, &Worker::scriptTick);
 }
 
 Worker::~Worker()
@@ -96,6 +100,11 @@ void Worker::connectDevice()
     emit busyChanged(true);
     try {
         streamTimer_->stop();
+        if (scriptTimer_->isActive()) {
+            scriptTimer_->stop();
+            emit scriptRunningChanged(false);
+        }
+        player_.reset();
         kb_.reset();
         transport_.reset();
         auto devs = hid::enumerate();
@@ -455,6 +464,8 @@ void Worker::setReportRate(int hz)
         kb_->set_report_rate_and_reboot(value);
         emit message(tr("Report rate set to %1 Hz; the keyboard reboots…").arg(hz), false);
         // Reconnect once the keyboard is back.
+        scriptTimer_->stop();
+        player_.reset();
         kb_.reset();
         transport_.reset();
         QThread::msleep(1500);
@@ -496,6 +507,68 @@ void Worker::paintColors(QVector<int> keys, QString color)
             colors[static_cast<std::size_t>(k)] = rgb;
         kb_->set_colors(p, colors);
     });
+}
+
+void Worker::scriptRun(QString source, QString name)
+{
+    if (!ready())
+        return;
+    try {
+        if (!player_) {
+            player_ = std::make_unique<mchose::script::ScriptPlayer>(*kb_);
+            player_->script().set_print_handler([this](const std::string& l) { emit scriptLog(QString::fromStdString(l), false); });
+        }
+        player_->load(source.toStdString(), name.toStdString());
+        QVariantList params;
+        for (const auto& p : player_->script().params())
+            params.push_back(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
+                                         {"min", p.min}, {"max", p.max}, {"value", p.value}});
+        emit scriptParams(params);
+        emit scriptLog(tr("%1 started; %2").arg(name, QString::fromStdString(player_->input().status())), false);
+        scriptTimer_->start();
+        emit scriptRunningChanged(true);
+    } catch (const std::exception& e) {
+        scriptTimer_->stop();
+        emit scriptRunningChanged(false);
+        emit scriptLog(QString::fromStdString(e.what()), true);
+    }
+}
+
+void Worker::scriptStop()
+{
+    if (scriptTimer_->isActive()) {
+        scriptTimer_->stop();
+        emit scriptLog(tr("stopped; the keyboard returns to its effect in a few seconds"), false);
+    }
+    emit scriptRunningChanged(false);
+}
+
+void Worker::scriptSetParam(QString name, double value)
+{
+    if (player_)
+        player_->script().set_param(name.toStdString(), value);
+}
+
+void Worker::scriptTick()
+{
+    if (!player_ || !kb_) {
+        scriptTimer_->stop();
+        emit scriptRunningChanged(false);
+        return;
+    }
+    try {
+        player_->step();
+        const auto& c = player_->script().colors();
+        QByteArray rgb(static_cast<int>(3 * c.size()), 0);
+        for (std::size_t i = 0; i < c.size(); ++i)
+            for (std::size_t k = 0; k < 3; ++k)
+                rgb[static_cast<int>(3 * i + k)] = static_cast<char>(c[i][k]);
+        emit scriptColors(rgb);
+    } catch (const std::exception& e) {
+        scriptTimer_->stop();
+        emit scriptRunningChanged(false);
+        emit scriptLog(QString::fromStdString(e.what()), true);
+    }
 }
 
 void Worker::applyLight(int effect, int brightness, int speed, QString color)

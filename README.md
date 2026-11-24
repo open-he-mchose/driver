@@ -13,7 +13,8 @@ at <https://open-he-mchose.github.io/>; the firmware is not modified.
 | `hid/` | transport through [hidapi](https://github.com/libusb/hidapi) | hidapi |
 | `cli/` | `mchosectl` | core, hid |
 | `tests/` | unit tests with a simulated keyboard; golden values from the documentation | core |
-| `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, Qt 6.5+ |
+| `script/` | Lua 5.4 lighting effects: sandboxed scripts, key presses from the OS, live colours | core, Lua (downloaded) |
+| `gui/` | `mchose-gui`, Qt 6 / Qt Quick configurator (GPL-3.0) | core, hid, script, Qt 6.5+ |
 
 `gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0, early): visual keyboard, actuation and rapid trigger,
 remapping, lighting, live key depth, backup / restore. Build it with `-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with
@@ -48,6 +49,7 @@ mchosectl rate 8000                   report rate 1000/2000/4000/8000 (global; t
 mchosectl light set --effect static --brightness 60
 mchosectl light color W A S D ff0000  stored per-key colours; light effects lists the effects
 mchosectl light live rainbow          live colours (RAM only)
+mchosectl light script script/examples/typing_ripple.lua   Lua lighting effect (see below)
 mchosectl macro set 1 '"Hello!" Enter'          macros: +Key/-Key, Ctrl+C taps, "typed text", 50ms delays
 mchosectl macro bind F10 1 --mode once          once / hold / toggle / COUNT
 mchosectl macros                      stored macros and the keys bound to them
@@ -74,6 +76,28 @@ Close the official web driver while using it: two programs on the same interface
     bootloader (`--allow-dangerous`);
   - activating a profile outside the rotation (`--allow-outside-rotation`).
 - Restore never touches calibration.
+
+## Lighting effects in Lua
+
+Effects run on the computer and are shown with live colours (no flash writes; the keyboard returns to its own
+effect a few seconds after they stop). A script defines `frame(ctx)`, called 25 times per second:
+
+```lua
+params = { speed = { min = 0.1, max = 5, default = 1, label = "Speed" } }
+
+function frame(ctx)                      -- ctx.t, ctx.dt, ctx.keys, ctx.pressed, ctx.released, ctx.held, ctx.param
+  for _, key in ipairs(ctx.keys) do      -- key.index, key.name, key.x, key.y, key.w (key units)
+    ctx.set(key.index, hsv(key.x * 30 - ctx.t * 90 * ctx.param.speed, 1, 0.7))
+  end
+end
+```
+
+Helpers: `hsv(h, s, v)`, `mix(a, b, t)`, `clamp(x, lo, hi)`, `ctx.fill(r, g, b)`, `ctx.get(index)`, `print(...)`.
+Key presses come from the operating system (Linux: the keyboard's input devices, readable for members of the
+`input` group; Windows: the system key state), because the keyboard's depth stream pauses while colours are sent.
+Scripts run in a sandbox (no files, no OS access) with instruction and memory limits. Examples in
+[`script/examples`](script/examples): rainbow wave, typing ripple, heat map, fire, rain, Game of Life. In the GUI:
+the Effects tab (editor, parameters as sliders, live preview on the on-screen keyboard).
 
 ## Build
 

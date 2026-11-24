@@ -65,6 +65,7 @@ Item {
             required property bool selected
             required property bool remapped
             required property bool dangerous
+            required property string liveColor
 
             x: root.ox + kx * root.u + 2
             y: 4 + ky * root.u + 2
@@ -89,6 +90,15 @@ Item {
                     color: palette.highlight
                     opacity: 0.55
                     visible: key.depth > 0 && !root.picker
+                }
+                // Live preview of a running effect (the effect's own colours).
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    radius: 4
+                    visible: key.liveColor.length > 0 && !root.picker
+                    color: key.liveColor.length > 0 ? key.liveColor : "transparent"
+                    opacity: 0.85
                 }
                 // Stored colour swatch (lighting tab).
                 Rectangle {

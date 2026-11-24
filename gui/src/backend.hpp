@@ -38,6 +38,9 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList advanced READ advanced NOTIFY snapshotChanged)   // [{layer, key, label, kind, summary, problem}]
     Q_PROPERTY(QStringList advancedOrphans READ advancedOrphans NOTIFY snapshotChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(bool scriptRunning READ scriptRunning NOTIFY scriptRunningChanged)
+    Q_PROPERTY(QVariantList scriptParams READ scriptParams NOTIFY scriptParamsChanged)
+    Q_PROPERTY(QStringList scriptExamples READ scriptExamples CONSTANT)
 public:
     explicit Backend(QObject* parent = nullptr);
     ~Backend() override;
@@ -66,6 +69,9 @@ public:
     QVariantList advanced() const;
     QStringList advancedOrphans() const { return snap_.advOrphans; }
     QString version() const { return QStringLiteral(MCHOSE_VERSION); }
+    bool scriptRunning() const { return scriptRunning_; }
+    QVariantList scriptParams() const { return scriptParams_; }
+    QStringList scriptExamples() const;
 
     Q_INVOKABLE void connectDevice();
     Q_INVOKABLE void refresh();
@@ -93,6 +99,13 @@ public:
     Q_INVOKABLE void setReportRate(int hz);
     Q_INVOKABLE void setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
     Q_INVOKABLE void paintSelected(const QString& color);
+    // Lighting scripts (Lua).
+    Q_INVOKABLE QString exampleSource(const QString& name) const;
+    Q_INVOKABLE QString readTextFile(const QUrl& file);
+    Q_INVOKABLE bool writeTextFile(const QUrl& file, const QString& text);
+    Q_INVOKABLE void runScript(const QString& source, const QString& name);
+    Q_INVOKABLE void stopScript();
+    Q_INVOKABLE void setScriptParam(const QString& name, double value);
     // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
     Q_INVOKABLE QVariantList storedSpans(int ds, int de, int us, int ue) const;
 
@@ -102,6 +115,9 @@ signals:
     void streamingChanged();
     void snapshotChanged();
     void message(QString text, bool error);
+    void scriptRunningChanged();
+    void scriptParamsChanged();
+    void scriptLog(QString line, bool error);
 
     // to the worker thread
     void doConnect();
@@ -127,6 +143,9 @@ signals:
     void doReportRate(int hz);
     void doSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
     void doPaint(QVector<int> keys, QString color);
+    void doScriptRun(QString source, QString name);
+    void doScriptStop();
+    void doScriptParam(QString name, double value);
 
 private:
     QThread thread_;
@@ -137,4 +156,6 @@ private:
     bool connected_ = false;
     bool busy_ = false;
     bool streaming_ = false;
+    bool scriptRunning_ = false;
+    QVariantList scriptParams_;
 };

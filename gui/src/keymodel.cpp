@@ -14,7 +14,7 @@ void KeyModel::setLayout(std::span<const mchose::KeyCap> layout)
     height_ = 0;
     for (const auto& cap : layout) {
         rowOfIndex_[cap.index] = static_cast<int>(keys_.size());
-        keys_.push_back({cap, {}, 0, false, false});
+        keys_.push_back({cap, {}, 0, false, false, {}});
         width_ = std::max(width_, static_cast<double>(cap.x + cap.w));
         height_ = std::max(height_, static_cast<double>(cap.y + 1));
     }
@@ -39,6 +39,23 @@ void KeyModel::setDepth(int matrixIndex, double mm, bool pressed)
     keys_[row].depth = mm;
     keys_[row].pressed = pressed;
     emit dataChanged(index(row), index(row), {DepthRole, PressedRole});
+}
+
+void KeyModel::setLiveColors(const QByteArray& rgb)
+{
+    for (auto& k : keys_) {
+        const int o = 3 * k.cap.index;
+        if (rgb.size() >= o + 3) {
+            k.live = QStringLiteral("#%1%2%3")
+                         .arg(static_cast<unsigned char>(rgb[o]), 2, 16, QChar('0'))
+                         .arg(static_cast<unsigned char>(rgb[o + 1]), 2, 16, QChar('0'))
+                         .arg(static_cast<unsigned char>(rgb[o + 2]), 2, 16, QChar('0'));
+        } else {
+            k.live.clear();
+        }
+    }
+    if (!keys_.isEmpty())
+        emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {LiveColorRole});
 }
 
 void KeyModel::clearDepth()
@@ -73,6 +90,7 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case SelectedRole: return k.selected;
     case RemappedRole: return k.settings.remapped[static_cast<std::size_t>(layer_)];
     case DangerousRole: return k.settings.dangerous[static_cast<std::size_t>(layer_)];
+    case LiveColorRole: return k.live;
     default: return {};
     }
 }
@@ -83,7 +101,7 @@ QHash<int, QByteArray> KeyModel::roleNames() const
             {WRole, "kw"},              {MappingRole, "mapping"}, {ActuationRole, "actuation"}, {ModeRole, "mode"},
             {PressRole, "rtPress"},     {ReleaseRole, "rtRelease"}, {ColorRole, "keyColor"}, {DepthRole, "depth"},
             {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"},
-            {DangerousRole, "dangerous"}};
+            {DangerousRole, "dangerous"}, {LiveColorRole, "liveColor"}};
 }
 
 void KeyModel::select(int row, bool add)

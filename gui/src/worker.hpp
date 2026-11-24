@@ -17,6 +17,7 @@
 
 #include "mchose/glw/keyboard.hpp"
 #include "mchose/hid/hidapi_transport.hpp"
+#include "mchose/script/script_player.hpp"
 
 // Everything the UI shows, read from the keyboard in one go.
 struct Snapshot {
@@ -77,6 +78,9 @@ public slots:
     void setReportRate(int hz);                       // the keyboard reboots; reconnects afterwards
     void setSettings(bool winLock, bool altTabLock, bool altF4Lock, bool menuLock, bool macMode);
     void paintColors(QVector<int> keys, QString color);
+    void scriptRun(QString source, QString name);   // load and start (25 fps, live colours)
+    void scriptStop();
+    void scriptSetParam(QString name, double value);
     void applyLight(int effect, int brightness, int speed, QString color);
     void backup(QString path);
     void restore(QString path);
@@ -89,6 +93,10 @@ signals:
     void busyChanged(bool busy);
     void depth(int key, double mm, bool pressed);
     void streamingChanged(bool on);
+    void scriptRunningChanged(bool running);
+    void scriptParams(QVariantList params);      // [{name, label, min, max, value}]
+    void scriptLog(QString line, bool error);
+    void scriptColors(QByteArray rgb);           // 3 bytes per matrix index, after every frame
 
 private:
     bool ready();
@@ -96,6 +104,7 @@ private:
     void run(const QString& what, F&& f, bool reread = true);
     void autoBackup();
     void pollStream();
+    void scriptTick();
 
     std::unique_ptr<mchose::hid::HidapiTransport> transport_;
     std::unique_ptr<mchose::glw::Keyboard> kb_;
@@ -104,5 +113,7 @@ private:
     void setKeys(const QVector<int>& keys, int layer, const std::function<mchose::glw::KeyCode(int)>& codeFor,
                  bool allowDangerous = false);
     QTimer* streamTimer_ = nullptr;
+    QTimer* scriptTimer_ = nullptr;
+    std::unique_ptr<mchose::script::ScriptPlayer> player_;
     bool backedUp_ = false;
 };

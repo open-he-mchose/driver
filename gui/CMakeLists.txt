@@ -28,11 +28,17 @@ qt_add_qml_module(mchose-gui
     qml/KeymapPanel.qml
     qml/MacroPanel.qml
     qml/AdvancedPanel.qml
+    qml/ScriptPanel.qml
     qml/LightingPanel.qml
     qml/DevicePanel.qml
 )
 
-target_link_libraries(mchose-gui PRIVATE mchose::core mchose::hid
+file(GLOB MCHOSE_GUI_EXAMPLES_ABS ${PROJECT_SOURCE_DIR}/script/examples/*.lua)
+qt_add_resources(mchose-gui "lua_examples"
+  PREFIX "/examples"
+  BASE ${PROJECT_SOURCE_DIR}/script/examples
+  FILES ${MCHOSE_GUI_EXAMPLES_ABS})
+target_link_libraries(mchose-gui PRIVATE mchose::core mchose::hid mchose::script
   Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
 target_compile_definitions(mchose-gui PRIVATE MCHOSE_VERSION="${PROJECT_VERSION}")
 set_target_properties(mchose-gui PROPERTIES WIN32_EXECUTABLE ON)

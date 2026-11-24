@@ -68,6 +68,7 @@ public:
     const std::vector<Rgb>& frame(const FrameInput& in);
 
     std::vector<Param> params() const;
+    const std::vector<Rgb>& colors() const { return colors_; }   // last frame
     void set_param(const std::string& name, double value);
 
     void set_print_handler(std::function<void(const std::string&)> h) { print_ = std::move(h); }
