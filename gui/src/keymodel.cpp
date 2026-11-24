@@ -39,6 +39,17 @@ void KeyModel::setDepth(int matrixIndex, double mm, bool pressed)
     keys_[row].depth = mm;
     keys_[row].pressed = pressed;
     emit dataChanged(index(row), index(row), {DepthRole, PressedRole});
+    emit depthSample(matrixIndex, mm, pressed);
+}
+
+QVariantMap KeyModel::keyInfo(int matrixIndex) const
+{
+    if (matrixIndex < 0 || matrixIndex >= rowOfIndex_.size() || rowOfIndex_[matrixIndex] < 0)
+        return {};
+    const auto& k = keys_[rowOfIndex_[matrixIndex]];
+    return {{"matrixIndex", matrixIndex}, {"label", QString::fromUtf8(k.cap.label)}, {"actuation", k.settings.actuation},
+            {"mode", k.settings.mode}, {"rtPress", k.settings.rtPress}, {"rtRelease", k.settings.rtRelease},
+            {"depth", k.depth}, {"pressed", k.pressed}};
 }
 
 void KeyModel::setLiveColors(const QByteArray& rgb)
@@ -150,7 +161,7 @@ QVariantMap KeyModel::firstSelected() const
 {
     for (const auto& k : keys_)
         if (k.selected)
-            return {{"label", QString::fromUtf8(k.cap.label)},
+            return {{"matrixIndex", k.cap.index}, {"label", QString::fromUtf8(k.cap.label)},
                     {"mapping", k.settings.mapping[static_cast<std::size_t>(layer_)]},
                     {"remapped", k.settings.remapped[static_cast<std::size_t>(layer_)]},
                     {"dangerous", k.settings.dangerous[static_cast<std::size_t>(layer_)]},

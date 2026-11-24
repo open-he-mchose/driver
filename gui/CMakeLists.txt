@@ -25,6 +25,7 @@ qt_add_qml_module(mchose-gui
     qml/Main.qml
     qml/KeyboardView.qml
     qml/TriggerPanel.qml
+    qml/DepthGraph.qml
     qml/KeymapPanel.qml
     qml/MacroPanel.qml
     qml/AdvancedPanel.qml

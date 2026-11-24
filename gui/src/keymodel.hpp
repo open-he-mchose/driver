@@ -37,6 +37,7 @@ public:
     Q_INVOKABLE void selectAll();
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE QVariantMap firstSelected() const;   // settings of the first selected key
+    Q_INVOKABLE QVariantMap keyInfo(int matrixIndex) const;   // label and trigger settings of one key
     QVector<int> selectedIndices() const;            // matrix indices
     int selectedCount() const;
     double widthUnits() const { return width_; }
@@ -47,6 +48,7 @@ public:
 signals:
     void selectionChanged();
     void layerChanged();
+    void depthSample(int matrixIndex, double mm, bool pressed);   // every depth-stream update
 
 private:
     struct Item {

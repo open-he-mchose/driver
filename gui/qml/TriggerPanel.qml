@@ -15,14 +15,23 @@ Pane {
     }
     Connections {
         target: backend.keys
-        function onSelectionChanged() { panel.load() }
+        function onSelectionChanged() {
+            panel.load()
+            depthGraph.tracked = backend.keys.selectedCount > 0 ? backend.keys.firstSelected().matrixIndex : -1
+        }
     }
+
+    RowLayout {
+    anchors.fill: parent
+    spacing: 16
 
     GridLayout {
         columns: 3
         columnSpacing: 16
         rowSpacing: 0
-        width: Math.min(parent.width, 720)
+        Layout.preferredWidth: 520
+        Layout.maximumWidth: 600
+        Layout.alignment: Qt.AlignTop
 
         Label { text: qsTr("Actuation point") }
         Slider { id: act; from: 0.1; to: 3.4; stepSize: 0.01; value: 1.5; Layout.fillWidth: true }
@@ -53,5 +62,12 @@ Pane {
             onClicked: backend.applyTrigger(act.value, rt.currentIndex, press.value, release.value)
         }
         Item {}
+    }
+
+    DepthGraph {
+        id: depthGraph
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+    }
     }
 }
