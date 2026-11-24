@@ -17,7 +17,7 @@ public:
     std::deque<mchose::Report> inject;                      // delivered before the next reply
     int flash_writes = 0;
     int profile_switches = 0;
-    bool bad_reply_checksum_check = true;
+    int drop_requests = 0;                                  // swallow the next N requests
 
     FakeKeyboard()
     {
@@ -55,6 +55,10 @@ public:
     {
         using namespace mchose::glw;
         sent.push_back(r);
+        if (drop_requests > 0) {
+            --drop_requests;
+            return;
+        }
         mchose::Report rep{};
         rep[1] = r[1];
         rep[4] = r[4];

@@ -48,7 +48,8 @@ writing (every write is saved to the keyboard's flash; a full backup is made fir
   restore FILE                       write back what differs from FILE
 
 live
-  depth                              stream key depth until Ctrl+C (sets the FuncConfig debug bit)
+  depth [--off]                      stream key depth until Ctrl+C (sets the FuncConfig debug bit;
+                                     --off clears a bit left set)
 
 options
   --profile P                        profile 0-3 (default: the active one)
@@ -75,7 +76,7 @@ struct Args {
 
 Args parse_args(int argc, char** argv)
 {
-    static const char* flags[] = {"--factory", "--no-backup", "--allow-reboot", "--allow-dangerous",
+    static const char* flags[] = {"--factory", "--off", "--no-backup", "--allow-reboot", "--allow-dangerous",
                                   "--allow-outside-rotation", "--help", "-h"};
     Args a;
     for (int i = 1; i < argc; ++i) {
@@ -520,11 +521,35 @@ int cmd_restore(Tool& t)
 std::atomic<bool> g_stop{false};
 void on_signal(int) { g_stop = true; }
 
+// Turns the depth stream off again on every way out of cmd_depth (Ctrl+C, errors).
+struct DepthStreamGuard {
+    Keyboard& kb;
+    ~DepthStreamGuard()
+    {
+        try {
+            kb.set_depth_stream(false);
+            std::cerr << "\ndepth stream off\n";
+        } catch (const std::exception& e) {
+            std::cerr << "\ncould not turn the depth stream off: " << e.what()
+                      << " (the keyboard clears it at the next power-up; or run: mchosectl depth --off)\n";
+        }
+    }
+};
+
 int cmd_depth(Tool& t)
 {
     auto& kb = t.kb();
+    if (t.args_.flag("--off")) {
+        kb.set_depth_stream(false);
+        std::cout << "depth stream off\n";
+        return 0;
+    }
     std::signal(SIGINT, on_signal);
+#ifdef SIGTERM
+    std::signal(SIGTERM, on_signal);
+#endif
     kb.set_depth_stream(true);
+    DepthStreamGuard guard{kb};
     std::cerr << "depth stream on (Ctrl+C to stop; the stream pauses ~0.6 s after any host command)\n";
     // Read reports directly: no requests are sent while streaming.
     while (!g_stop) {
@@ -534,9 +559,8 @@ int cmd_depth(Tool& t)
         if (auto s = parse_depth_sample(*rep))
             std::printf("%-12s %5.2f mm  %s\n", to_string(s->key).c_str(), s->travel / 100.0,
                         s->pressed ? "pressed" : "");
+        std::fflush(stdout);
     }
-    kb.set_depth_stream(false);
-    std::cerr << "\ndepth stream off\n";
     return 0;
 }
 

@@ -214,6 +214,19 @@ TEST(session_chunks_and_skips_unsolicited)
     CHECK_EQ(int(data[0]), 0xA0);
 }
 
+TEST(session_resends_lost_request)
+{
+    FakeKeyboard kb;
+    Session s(kb);
+    s.set_timeout(std::chrono::milliseconds(5));
+    kb.drop_requests = 2;
+    auto data = s.read(cmd::GetBase, 0, 8);
+    CHECK_EQ(int(data[6]), 0xAA);
+    CHECK_EQ(s.retries_used(), std::size_t(2));
+    kb.drop_requests = 10;
+    CHECK_THROWS(s.read(cmd::GetBase, 0, 8), ProtocolError);
+}
+
 TEST(session_error_reply)
 {
     FakeKeyboard kb;

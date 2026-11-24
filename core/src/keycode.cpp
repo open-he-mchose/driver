@@ -47,7 +47,9 @@ struct ConsumerName {
 
 constexpr ConsumerName kConsumer[] = {
     {0xE2, "Mute"}, {0xE9, "VolumeUp"}, {0xEA, "VolumeDown"}, {0xCD, "PlayPause"},
-    {0xB5, "NextTrack"}, {0xB6, "PrevTrack"}, {0xB7, "Stop"},
+    {0xB5, "NextTrack"}, {0xB6, "PrevTrack"}, {0xB7, "Stop"}, {0x6F, "ScreenBrightnessUp"},
+    {0x70, "ScreenBrightnessDown"}, {0x183, "MediaPlayer"}, {0x18A, "Mail"}, {0x192, "Calculator"},
+    {0x194, "MyComputer"}, {0x221, "WebSearch"}, {0x223, "WebHome"},
 };
 
 struct SpecialName {

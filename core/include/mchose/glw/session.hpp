@@ -28,7 +28,12 @@ public:
     // (A1, A3 ...), replies meant for another program.
     void set_unsolicited_handler(std::function<void(const Report&)> handler) { unsolicited_ = std::move(handler); }
 
+    // Time to wait for each reply, and how often a request is re-sent when no reply comes. Requests are
+    // idempotent (reads, and writes of the same bytes to the same offset). A lost request happens when
+    // another program (e.g. the official web driver) talks to the keyboard at the same moment.
     void set_timeout(std::chrono::milliseconds t) { timeout_ = t; }
+    void set_retries(int n) { retries_ = n; }
+    std::size_t retries_used() const { return retries_used_; }
 
     // One request, one reply. Returns the reply data (`size` bytes as echoed by the keyboard).
     std::vector<std::uint8_t> transact(std::uint8_t command, std::uint16_t offset, std::uint8_t size,
@@ -49,8 +54,10 @@ public:
 private:
     Transport& transport_;
     std::function<void(const Report&)> unsolicited_;
-    std::chrono::milliseconds timeout_{1000};
+    std::chrono::milliseconds timeout_{500};
+    int retries_ = 3;
     std::size_t requests_ = 0;
+    std::size_t retries_used_ = 0;
 };
 
 }  // namespace mchose::glw

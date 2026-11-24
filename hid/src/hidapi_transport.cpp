@@ -4,6 +4,7 @@
 #include <hidapi.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cwchar>
 #include <stdexcept>
 
@@ -106,7 +107,10 @@ void HidapiTransport::write(const Report& report)
 std::optional<Report> HidapiTransport::read(std::chrono::milliseconds timeout)
 {
     unsigned char buf[65] = {};
+    errno = 0;
     const int n = hid_read_timeout(impl_->dev, buf, sizeof buf, static_cast<int>(timeout.count()));
+    if (n < 0 && errno == EINTR)
+        return std::nullopt;   // interrupted by a signal (e.g. Ctrl+C): no data
     if (n < 0)
         throw std::runtime_error("hid_read failed: " + error_text(impl_->dev));
     if (n == 0)

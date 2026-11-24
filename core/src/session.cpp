@@ -28,28 +28,35 @@ std::uint16_t checked_offset(std::uint32_t offset)
 std::vector<std::uint8_t> Session::transact(std::uint8_t command, std::uint16_t offset, std::uint8_t size,
                                             std::span<const std::uint8_t> data)
 {
-    transport_.write(make_request(command, offset, size, data));
-    ++requests_;
-    const auto deadline = std::chrono::steady_clock::now() + timeout_;
-    for (;;) {
-        const auto now = std::chrono::steady_clock::now();
-        if (now >= deadline)
-            throw ProtocolError("no reply to command " + hex2(command) + " at offset " + std::to_string(offset));
-        auto rep = transport_.read(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
-        if (!rep)
-            continue;
-        auto reply = parse_reply(*rep);
-        if (reply && reply->command == command && reply->offset == offset) {
-            if (!reply->ok) {
-                std::string why(reply->data.begin(), std::find(reply->data.begin(), reply->data.end(), 0));
-                throw ProtocolError("keyboard rejected command " + hex2(command) + ": " +
-                                    (why.empty() ? std::string("error") : why));
+    const Report request = make_request(command, offset, size, data);
+    for (int attempt = 0; attempt <= retries_; ++attempt) {
+        if (attempt)
+            ++retries_used_;
+        transport_.write(request);
+        ++requests_;
+        const auto deadline = std::chrono::steady_clock::now() + timeout_;
+        for (;;) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline)
+                break;   // no reply: send the request again
+            auto rep = transport_.read(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
+            if (!rep)
+                continue;
+            auto reply = parse_reply(*rep);
+            if (reply && reply->command == command && reply->offset == offset) {
+                if (!reply->ok) {
+                    std::string why(reply->data.begin(), std::find(reply->data.begin(), reply->data.end(), 0));
+                    throw ProtocolError("keyboard rejected command " + hex2(command) + ": " +
+                                        (why.empty() ? std::string("error") : why));
+                }
+                return {reply->data.begin(), reply->data.end()};
             }
-            return {reply->data.begin(), reply->data.end()};
+            if (unsolicited_)
+                unsolicited_(*rep);
         }
-        if (unsolicited_)
-            unsolicited_(*rep);
     }
+    throw ProtocolError("no reply to command " + hex2(command) + " at offset " + std::to_string(offset) +
+                        " (is another program, e.g. the official web driver, using the keyboard?)");
 }
 
 std::vector<std::uint8_t> Session::read(std::uint8_t command, std::uint32_t offset, std::size_t length)
