@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libhidapi-dev pkg-config ninja-build
+
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Collect binary
+        shell: bash
+        run: |
+          mkdir dist
+          if [ "$RUNNER_OS" = Windows ]; then cp build/cli/Release/mchosectl.exe dist/; else cp build/cli/mchosectl dist/; fi
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mchosectl-${{ runner.os }}
+          path: dist/
