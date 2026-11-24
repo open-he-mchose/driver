@@ -37,7 +37,7 @@ Pane {
 
         Label { text: qsTr("Colour") }
         TextField { id: colorField; placeholderText: "#rrggbb"; Layout.fillWidth: true }
-        Rectangle { width: 28; height: 28; radius: 4; color: /^#[0-9a-fA-F]{6}$/.test(colorField.text) ? colorField.text : "transparent"; border.color: "#888" }
+        Rectangle { width: 28; height: 28; radius: 4; color: /^#[0-9a-fA-F]{6}$/.test(colorField.text) ? colorField.text : "transparent"; border.color: palette.mid }
 
         Item {}
         Button {

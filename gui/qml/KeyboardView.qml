@@ -9,15 +9,6 @@ Item {
     property string overlay: "actuation"   // actuation | mapping | color | depth | none
     property bool picker: false               // palette mode: clicking a key emits picked() instead of selecting
     signal picked(int matrixIndex)
-    // Colours derived from the window background of the active style, so the keyboard fits any style
-    // (Fusion with the system palette, Material, Universal ...).
-    property color base: palette.window
-    readonly property bool dark: (0.299 * base.r + 0.587 * base.g + 0.114 * base.b) < 0.5
-    readonly property color keyColor: dark ? Qt.lighter(base, 1.55) : Qt.darker(base, 1.06)
-    readonly property color keyPressedColor: dark ? Qt.lighter(base, 2.2) : Qt.darker(base, 1.25)
-    readonly property color keyBorder: dark ? Qt.lighter(base, 2.0) : Qt.darker(base, 1.3)
-    readonly property color textColor: dark ? "#eeeeee" : "#202020"
-    readonly property color dimText: dark ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 0, 0.5)
     readonly property real u: Math.min((width - 8) / backend.keys.widthUnits, (height - 8) / backend.keys.heightUnits)
     readonly property real ox: (width - u * backend.keys.widthUnits) / 2   // centre horizontally
     readonly property real maxTravel: 3.4
@@ -25,7 +16,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 10
-        color: root.dark ? Qt.lighter(root.base, 1.2) : Qt.darker(root.base, 1.04)
+        color: palette.base
     }
 
     // Rubber-band selection on the empty area.
@@ -83,9 +74,9 @@ Item {
                 id: cap
                 anchors.fill: parent
                 radius: 6
-                color: key.pressed ? root.keyPressedColor : root.keyColor
+                color: key.pressed ? palette.midlight : palette.button
                 border.width: key.selected && !root.picker ? 2 : 1
-                border.color: key.selected && !root.picker ? palette.highlight : root.keyBorder
+                border.color: key.selected && !root.picker ? palette.highlight : palette.mid
                 clip: true
 
                 // Depth fill (live stream).
@@ -106,7 +97,7 @@ Item {
                     anchors.margins: 4
                     width: 10; height: 10; radius: 5
                     color: key.keyColor
-                    border.color: "#888"
+                    border.color: palette.mid
                 }
             }
             Text {
@@ -114,7 +105,7 @@ Item {
                 anchors.top: parent.top
                 anchors.margins: 5
                 text: key.label
-                color: root.textColor
+                color: palette.buttonText
                 font.pixelSize: Math.max(9, root.u * 0.22)
             }
             Text {
@@ -126,7 +117,7 @@ Item {
                 elide: Text.ElideRight
                 font.pixelSize: Math.max(8, root.u * 0.18)
                 color: (root.overlay === "mapping" && key.remapped) || (root.overlay === "actuation" && key.mode > 0)
-                       ? palette.highlight : root.dimText
+                       ? palette.highlight : palette.placeholderText
                 text: root.overlay === "actuation" ? key.actuation.toFixed(2)
                     : root.overlay === "mapping" ? (key.remapped ? key.mapping : "")
                     : root.overlay === "depth" ? (key.depth > 0 ? key.depth.toFixed(2) : "")

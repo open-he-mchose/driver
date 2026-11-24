@@ -49,8 +49,8 @@ ApplicationWindow {
                     font.bold: backend.activeProfile === index
                     background: Rectangle {
                         radius: 4
-                        color: backend.activeProfile === index ? Qt.rgba(0.5, 0.5, 0.5, 0.35) : "transparent"
-                        border.color: backend.activeProfile === index ? palette.highlight : Qt.rgba(0.5, 0.5, 0.5, 0.4)
+                        color: backend.activeProfile === index ? palette.highlight : "transparent"
+                        border.color: palette.mid
                     }
                     ToolTip.visible: hovered
                     ToolTip.text: backend.rotation.indexOf(index) >= 0
@@ -80,7 +80,6 @@ ApplicationWindow {
 
         KeyboardView {
             id: kbd
-            base: win.color
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex === 1 ? "mapping"
@@ -128,7 +127,8 @@ ApplicationWindow {
         Label {
             width: parent.width
             text: win.lastMessage
-            color: win.lastIsError ? "#d32f2f" : palette.windowText
+            color: palette.windowText
+            font.bold: win.lastIsError
             elide: Text.ElideRight
         }
     }

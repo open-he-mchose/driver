@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Qt 6 / Qt Quick GUI. GPL-3.0 (Qt open-source edition, linked dynamically); core/hid stay MIT.
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
 qt_standard_project_setup(REQUIRES 6.5)
 if(QT_KNOWN_POLICY_QTP0004)
   qt_policy(SET QTP0004 NEW)
@@ -29,7 +29,7 @@ qt_add_qml_module(mchose-gui
 )
 
 target_link_libraries(mchose-gui PRIVATE mchose::core mchose::hid
-  Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+  Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
 target_compile_definitions(mchose-gui PRIVATE MCHOSE_VERSION="${PROJECT_VERSION}")
 set_target_properties(mchose-gui PROPERTIES WIN32_EXECUTABLE ON)
 install(TARGETS mchose-gui RUNTIME DESTINATION bin)

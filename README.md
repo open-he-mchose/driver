@@ -17,9 +17,8 @@ at <https://open-he-mchose.github.io/>; the firmware is not modified.
 
 `gui/` holds the Qt 6 configurator (`mchose-gui`, GPL-3.0, early): visual keyboard, actuation and rapid trigger,
 remapping, lighting, live key depth, backup / restore. Build it with `-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with
-Qt Quick and Quick Controls 2). It uses the platform style and the system colours (Fusion with the system palette on Linux, the KDE desktop
-style in Plasma sessions, the native style on Windows); `--style NAME` (or `QT_QUICK_CONTROLS_STYLE`) selects
-another Qt Quick Controls style, e.g. `org.kde.desktop`, `Material`, `Universal`. `core`, `hid` and `cli` stay MIT.
+Qt Quick and Quick Controls 2). It uses the system look: the platform's default
+Qt Quick Controls style and the system palette, no colours of its own. `core`, `hid` and `cli` stay MIT.
 
 ## Supported keyboards
 
