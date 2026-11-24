@@ -15,7 +15,12 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName("mchose-gui");
     QGuiApplication::setOrganizationName("open-he-mchose");
     QGuiApplication::setApplicationVersion(MCHOSE_VERSION);
-    QQuickStyle::setStyle("Material");
+    // Platform style by default (Fusion with the system palette on Linux, the native style on Windows).
+    // Override with --style NAME or QT_QUICK_CONTROLS_STYLE, e.g. Material, Universal, Fusion, Basic.
+    const QStringList a = QCoreApplication::arguments();
+    const int styleArg = static_cast<int>(a.indexOf("--style"));
+    if (styleArg >= 0 && styleArg + 1 < a.size())
+        QQuickStyle::setStyle(a[styleArg + 1]);
 
     Backend backend;
     QQmlApplicationEngine engine;

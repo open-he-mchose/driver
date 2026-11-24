@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 
 ApplicationWindow {
@@ -12,9 +11,6 @@ ApplicationWindow {
     minimumHeight: 600
     visible: true
     title: "MCHOSE configurator " + backend.version + (backend.connected ? " — " + backend.modelName : "")
-    Material.theme: Material.Dark
-    Material.accent: Material.Teal
-    Material.primary: "#263238"
 
     property string lastMessage: ""
     property int startTab: 0
@@ -51,11 +47,17 @@ ApplicationWindow {
                     flat: true
                     implicitWidth: 44
                     font.bold: backend.activeProfile === index
-                    Material.foreground: backend.activeProfile === index ? Material.accent : "#cfd8dc"
+                    contentItem: Label {
+                        text: parent.text
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        color: backend.activeProfile === index ? palette.highlightedText : palette.buttonText
+                    }
                     background: Rectangle {
                         radius: 4
-                        color: backend.activeProfile === index ? Qt.rgba(0, 0.59, 0.53, 0.25) : "transparent"
-                        border.color: backend.activeProfile === index ? Material.accent : "transparent"
+                        color: backend.activeProfile === index ? palette.highlight : "transparent"
+                        border.color: backend.activeProfile === index ? palette.highlight : palette.mid
                     }
                     ToolTip.visible: hovered
                     ToolTip.text: backend.rotation.indexOf(index) >= 0
@@ -86,7 +88,7 @@ ApplicationWindow {
         KeyboardView {
             id: kbd
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.45)
+            Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.58)
             overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex === 1 ? "mapping"
                    : tabs.currentIndex === 2 ? "color" : "depth"
             enabled: backend.connected
@@ -132,7 +134,7 @@ ApplicationWindow {
         Label {
             width: parent.width
             text: win.lastMessage
-            color: win.lastIsError ? Material.color(Material.Red, Material.Shade300) : Material.foreground
+            color: win.lastIsError ? "#d32f2f" : palette.windowText
             elide: Text.ElideRight
         }
     }
