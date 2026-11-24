@@ -44,14 +44,21 @@ int main(int argc, char* argv[])
     // clash with the palette, so it is only used there on request (--style org.kde.desktop).
     const QStringList a = QCoreApplication::arguments();
     const int styleArg = static_cast<int>(a.indexOf("--style"));
-    if (styleArg >= 0 && styleArg + 1 < a.size())
-        QQuickStyle::setStyle(a[styleArg + 1]);
+    QString style = styleArg >= 0 && styleArg + 1 < a.size() ? a[styleArg + 1] : qEnvironmentVariable("QT_QUICK_CONTROLS_STYLE");
 #ifdef Q_OS_LINUX
-    else if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE") &&
-             qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("KDE", Qt::CaseInsensitive) &&
-             qml_module_installed("org.kde.desktop"))
-        QQuickStyle::setStyle("org.kde.desktop");
+    if (style.isEmpty())
+        style = qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("KDE", Qt::CaseInsensitive) &&
+                        qml_module_installed("org.kde.desktop")
+                    ? QStringLiteral("org.kde.desktop")
+                    : QStringLiteral("Fusion");   // explicit: Qt may otherwise pick up a widget style name (e.g. kvantum)
 #endif
+    static const QStringList builtin{"Basic", "Fusion", "Imagine", "Material", "Universal", "FluentWinUI3", "Windows", "macOS", "iOS"};
+    if (!style.isEmpty() && !builtin.contains(style, Qt::CaseInsensitive) && !qml_module_installed(style)) {
+        qWarning("Qt Quick Controls style '%s' is not installed; using Fusion", qPrintable(style));
+        style = QStringLiteral("Fusion");
+    }
+    if (!style.isEmpty())
+        QQuickStyle::setStyle(style);
 
     Backend backend;
     QQmlApplicationEngine engine;
