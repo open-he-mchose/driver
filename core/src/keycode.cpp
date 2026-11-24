@@ -113,6 +113,15 @@ std::optional<std::uint8_t> usage_by_name(const std::string& name)
     if (n == "return") return std::uint8_t{0x28};
     if (n == "escape") return std::uint8_t{0x29};
     if (n == "del") return std::uint8_t{0x4C};
+    if (n == "comma") return std::uint8_t{0x36};
+    if (n == "period" || n == "dot") return std::uint8_t{0x37};
+    if (n == "minus") return std::uint8_t{0x2D};
+    if (n == "equal") return std::uint8_t{0x2E};
+    if (n == "slash") return std::uint8_t{0x38};
+    if (n == "backslash") return std::uint8_t{0x31};
+    if (n == "semicolon") return std::uint8_t{0x33};
+    if (n == "quote") return std::uint8_t{0x34};
+    if (n == "grave") return std::uint8_t{0x35};
     return std::nullopt;
 }
 

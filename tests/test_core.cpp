@@ -9,6 +9,7 @@
 #include "check.hpp"
 #include "fake_keyboard.hpp"
 #include "mchose/glw/keyboard.hpp"
+#include "mchose/glw/macro_text.hpp"
 
 using namespace mchose;
 using namespace mchose::glw;
@@ -333,4 +334,40 @@ TEST(depth_sample_parse)
     CHECK_EQ(s->max_travel, 341);
     CHECK_EQ(s->adc, 3000);
     CHECK_EQ(s->adc_rest, 4000);
+}
+
+TEST(macro_text_parse)
+{
+    using K = MacroAction::Kind;
+    // A combination tap expands like the official driver's records.
+    auto m = parse_macro("Ctrl+C", 20);
+    Macro want = {{K::Modifier, 0x01, true, 20}, {K::Key, 0x06, true, 20}, {K::Key, 0x06, false, 20},
+                  {K::Modifier, 0x01, false, 20}};
+    CHECK(m == want);
+    // Explicit presses, delays after the previous action, a leading pause, a wait record.
+    m = parse_macro("500ms +LShift +B 30ms -B wait 1000ms -LShift", 10);
+    Macro want2 = {{K::Delay, 0, false, 500}, {K::Modifier, 0x02, true, 10}, {K::Key, 0x05, true, 30},
+                   {K::Key, 0x05, false, 10}, {K::Delay, 0, false, 1000}, {K::Modifier, 0x02, false, 10}};
+    CHECK(m == want2);
+    // Typing adds Shift where needed.
+    m = parse_macro("\"Hi!\"", 5);
+    CHECK_EQ(m.size(), std::size_t(10));   // Shift+H (4), i (2), Shift+1 (4)
+    CHECK(m[0] == (MacroAction{K::Modifier, 0x02, true, 5}));
+    CHECK(m[1] == (MacroAction{K::Key, 0x0B, true, 5}));
+    CHECK(m[4] == (MacroAction{K::Key, 0x0C, true, 5}));
+    CHECK(m[7] == (MacroAction{K::Key, 0x1E, true, 5}));
+    CHECK_THROWS(parse_macro("NoSuchKey"), std::invalid_argument);
+    CHECK_THROWS(parse_macro("+Ctrl+C"), std::invalid_argument);
+    CHECK_THROWS(parse_macro("\"unterminated"), std::invalid_argument);
+}
+
+TEST(macro_text_roundtrip)
+{
+    for (const char* text : {"Ctrl+Shift+Esc", "500ms +LShift +B 30ms -B wait 1000ms -LShift", "\"a,b. C\"",
+                             "+Comma -Comma - = 200ms"}) {
+        auto m = parse_macro(text, 15);
+        auto back = parse_macro(format_macro(m), 99);
+        CHECK(back == m);
+    }
+    CHECK_EQ(format_macro(parse_macro("Ctrl+C", 20)), std::string("+LCtrl 20ms +C 20ms -C 20ms -LCtrl 20ms"));
 }

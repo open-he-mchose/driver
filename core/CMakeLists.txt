@@ -6,6 +6,7 @@ add_library(mchose_core
   src/structs.cpp
   src/keycode.cpp
   src/macro.cpp
+  src/macro_text.cpp
   src/model.cpp
   src/keyboard.cpp
 )

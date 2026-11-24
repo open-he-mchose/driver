@@ -20,6 +20,7 @@
 
 #include "json.hpp"
 #include "mchose/glw/keyboard.hpp"
+#include "mchose/glw/macro_text.hpp"
 #include "mchose/hid/hidapi_transport.hpp"
 
 using namespace mchose;
@@ -37,7 +38,7 @@ reading
   info                               firmware, profiles, report rate, lighting
   keymap [--layer L] [--factory]     key mapping of a layer
   trigger                            actuation and rapid-trigger settings of every key
-  macros                             stored macros
+  macros                             stored macros and the keys bound to them
 
 writing (every write is saved to the keyboard's flash; a full backup is made first)
   profile N                          switch the active profile
@@ -46,6 +47,11 @@ writing (every write is saved to the keyboard's flash; a full backup is made fir
   trigger set KEY... [--actuation MM] [--press MM] [--release MM] [--rt off|on|continuous]
                                      KEY = name, index or "all"
   light set [--effect N] [--brightness 0-100] [--speed 0-4] [--color RRGGBB]
+  macro set N "TEXT" [--delay MS]    store macro N (1-16), e.g. "Ctrl+C", "+LShift +A 50ms -A -LShift",
+                                     "\"text to type\"", "wait 200ms"; delays are after the previous action
+  macro clear N|all
+  macro bind KEY N [--mode once|hold|toggle|COUNT] [--layer L]
+                                     hold = repeat while held, toggle = repeat until pressed again
   backup [FILE]                      save all profiles, keymaps, triggers, lighting, advanced keys, macros
   restore FILE                       write back what differs from FILE
 
@@ -466,34 +472,120 @@ int cmd_light(Tool& t)
     return 0;
 }
 
+// Keys bound to macros in all layers of a profile: macro index -> "layer/key mode" list.
+std::map<int, std::vector<std::string>> macro_bindings(Tool& t, int profile)
+{
+    std::map<int, std::vector<std::string>> out;
+    for (int l = 0; l < t.kb().model().layers; ++l) {
+        auto km = t.kb().keymap(profile, l);
+        for (int k = 0; k < t.kb().model().keys; ++k)
+            if (km[k].type == KeyCode::Macro)
+                out[km[k].code1].push_back((l ? "Fn-layer " + std::to_string(l) + " " : std::string()) + t.key_label(k) +
+                                           " (" + to_string(km[k]).substr(to_string(km[k]).find(' ') + 1) + ")");
+    }
+    return out;
+}
+
 int cmd_macros(Tool& t)
 {
     auto set = t.kb().macros();
+    const int p = t.profile();
+    auto bound = macro_bindings(t, p);
     bool any = false;
     for (int i = 0; i < kMacroCount; ++i) {
-        if (set[i].empty())
+        if (set[i].empty() && !bound.count(i))
             continue;
         any = true;
-        std::cout << "M" << (i + 1) << ":";
-        for (const auto& a : set[i]) {
-            std::string what;
-            switch (a.kind) {
-            case MacroAction::Kind::Key: what = hid_usage_name(a.code) ? hid_usage_name(a.code) : "usage" + std::to_string(a.code); break;
-            case MacroAction::Kind::Modifier: what = to_string(KeyCode{KeyCode::Keyboard, a.code, 0}); break;
-            case MacroAction::Kind::Mouse: what = "mouse" + std::to_string(a.code) + "(ignored by Jet75-II)"; break;
-            case MacroAction::Kind::Delay: what = "wait"; break;
-            }
-            if (a.kind != MacroAction::Kind::Delay)
-                what = std::string(a.press ? "+" : "-") + what;
-            std::cout << " " << what;
-            if (a.delay_ms)
-                std::cout << " " << a.delay_ms << "ms";
+        std::cout << "M" << (i + 1) << ": " << (set[i].empty() ? "(empty)" : format_macro(set[i])) << "\n";
+        if (bound.count(i)) {
+            std::cout << "    bound in profile " << p << ":";
+            for (const auto& b : bound[i])
+                std::cout << " " << b;
+            std::cout << "\n";
         }
-        std::cout << "\n";
     }
     if (!any)
         std::cout << "no macros stored\n";
+    std::cout << "(macros are shared by all profiles; bindings belong to a profile)\n";
     return 0;
+}
+
+int macro_number(const std::string& s)
+{
+    const int n = to_int(s, "macro number");
+    if (n < 1 || n > kMacroCount)
+        throw std::runtime_error("macro number must be 1-" + std::to_string(kMacroCount));
+    return n;
+}
+
+int cmd_macro(Tool& t)
+{
+    const auto& pos = t.args_.pos;
+    if (pos.size() < 2)
+        throw std::runtime_error("usage: macro set N TEXT | macro clear N|all | macro bind KEY N [--mode ...]");
+    const std::string& sub = pos[1];
+    auto& kb = t.kb();
+    if (sub == "set") {
+        if (pos.size() < 4)
+            throw std::runtime_error("usage: macro set N \"TEXT\" [--delay MS]");
+        const int n = macro_number(pos[2]);
+        std::string text;
+        for (std::size_t i = 3; i < pos.size(); ++i)
+            text += (i > 3 ? " " : "") + pos[i];
+        const int delay = to_int(t.args_.get("--delay", "10"), "delay");
+        Macro m = parse_macro(text, static_cast<std::uint16_t>(delay));
+        if (m.empty())
+            throw std::runtime_error("macro is empty");
+        auto set = kb.macros();
+        set[n - 1] = m;
+        t.before_write();
+        kb.set_macros(set);
+        std::cout << "M" << n << ": " << format_macro(kb.macros()[n - 1]) << "\n";
+        if (!macro_bindings(t, t.profile()).count(n - 1))
+            std::cout << "not bound to a key yet: mchosectl macro bind KEY " << n << " [--mode once|hold|toggle|N]\n";
+        return 0;
+    }
+    if (sub == "clear") {
+        if (pos.size() < 3)
+            throw std::runtime_error("usage: macro clear N|all");
+        auto set = kb.macros();
+        if (pos[2] == "all")
+            set = MacroSet{};
+        else
+            set[macro_number(pos[2]) - 1].clear();
+        t.before_write();
+        kb.set_macros(set);
+        std::cout << "cleared (key bindings are kept; remap the keys to remove them)\n";
+        return 0;
+    }
+    if (sub == "bind") {
+        if (pos.size() < 4)
+            throw std::runtime_error("usage: macro bind KEY N [--mode once|hold|toggle|COUNT] [--layer L]");
+        const int key = t.key_index(pos[2]);
+        const int n = macro_number(pos[3]);
+        const std::string mode = t.args_.get("--mode", "once");
+        std::uint8_t code2;
+        if (mode == "once") code2 = 1;
+        else if (mode == "hold") code2 = 0;
+        else if (mode == "toggle") code2 = 0xFF;
+        else {
+            const int c = to_int(mode, "mode");
+            if (c < 1 || c > 254)
+                throw std::runtime_error("--mode COUNT must be 1-254");
+            code2 = static_cast<std::uint8_t>(c);
+        }
+        const int layer = to_int(t.args_.get("--layer", "0"), "layer");
+        const int p = t.profile();
+        if (kb.macros()[n - 1].empty())
+            std::cerr << "warning: M" << n << " is empty\n";
+        t.before_write();
+        KeyCode code{KeyCode::Macro, static_cast<std::uint8_t>(n - 1), code2};
+        kb.set_key(p, layer, key, code, t.write_options());
+        std::cout << "profile " << p << " layer " << layer << ": " << t.key_label(key) << " -> " << to_string(code) << "\n";
+        std::cout << "note: on Linux macro keys need the NKRO fix (open-he-mchose/linux-fixes) to be typed\n";
+        return 0;
+    }
+    throw std::runtime_error("unknown macro command '" + sub + "'");
 }
 
 int cmd_backup(Tool& t)
@@ -586,6 +678,7 @@ int main(int argc, char** argv)
         if (c == "trigger") return cmd_trigger(t);
         if (c == "light") return cmd_light(t);
         if (c == "macros") return cmd_macros(t);
+        if (c == "macro") return cmd_macro(t);
         if (c == "backup") return cmd_backup(t);
         if (c == "restore") return cmd_restore(t);
         if (c == "depth") return cmd_depth(t);
