@@ -10,6 +10,7 @@
 #include <cstdio>
 
 #include "mchose/glw/backup_file.hpp"
+#include "mchose/glw/macro_text.hpp"
 
 using namespace mchose;
 using namespace mchose::glw;
@@ -149,7 +150,7 @@ void Worker::refresh()
         std::array<std::vector<KeyCode>, 4> km;
         for (int l = 0; l < 4 && l < m.layers; ++l)
             km[static_cast<std::size_t>(l)] = kb_->keymap(s.activeProfile, l);
-        auto tr = kb_->triggers(s.activeProfile);
+        auto trig = kb_->triggers(s.activeProfile);
         auto colors = kb_->colors(s.activeProfile);
         const double unit = m.distance_unit_um / 1000.0;
         for (int i = 0; i < m.keys; ++i) {
@@ -164,13 +165,31 @@ void Worker::refresh()
                 key.remapped[l] = k < factory_[l].size() && code != forProfile(factory_[l][k], s.activeProfile);
                 key.dangerous[l] = code.is_dangerous();
             }
-            key.actuation = tr[k].actuation() * unit;
-            key.rtPress = tr[k].rt_press() * unit;
-            key.rtRelease = tr[k].rt_release() * unit;
-            key.mode = static_cast<int>(tr[k].mode());
+            key.actuation = trig[k].actuation() * unit;
+            key.rtPress = trig[k].rt_press() * unit;
+            key.rtRelease = trig[k].rt_release() * unit;
+            key.mode = static_cast<int>(trig[k].mode());
             key.color = hex_color(colors[k][0], colors[k][1], colors[k][2]);
             s.keys.push_back(key);
         }
+        // Macros (shared by all profiles) and the keys bound to them in this profile.
+        auto macros = kb_->macros();
+        for (int i = 0; i < kMacroCount; ++i) {
+            s.macroTexts << QString::fromStdString(format_macro(macros[static_cast<std::size_t>(i)]));
+            s.macroSteps << static_cast<int>(macros[static_cast<std::size_t>(i)].size());
+            s.macroBindings << QString();
+        }
+        static const char* layerNames[4] = {"", "Fn+", "Mac ", "Mac Fn+"};
+        for (std::size_t l = 0; l < 4; ++l)
+            for (int k = 0; k < static_cast<int>(km[l].size()) && k < m.keys; ++k) {
+                const KeyCode c = km[l][static_cast<std::size_t>(k)];
+                if (c.type != KeyCode::Macro || c.code1 >= kMacroCount)
+                    continue;
+                QString label = QString::fromStdString(to_string(factory_[0][static_cast<std::size_t>(k)]));
+                const QString mode = c.code2 == 0 ? tr("hold") : c.code2 == 0xFF ? tr("toggle") : c.code2 == 1 ? tr("once") : tr("%1×").arg(c.code2);
+                QString& b = s.macroBindings[c.code1];
+                b += (b.isEmpty() ? "" : ", ") + QString::fromLatin1(layerNames[l]) + label + " (" + mode + ")";
+            }
         emit refreshed(s);
     } catch (const std::exception& e) {
         emit message(QString::fromStdString(e.what()), true);
@@ -265,6 +284,29 @@ void Worker::resetToFactory(QVector<int> keys, int layer)
         // The factory Fn layer holds the reset codes (Fn+Esc, Fn+Backspace): restoring them is restoring the
         // keyboard's own defaults, so they are allowed here.
         setKeys(keys, layer, [&](int k) { return forProfile(f[static_cast<std::size_t>(k)], p); }, true);
+    });
+}
+
+void Worker::setMacro(int index, QString text)
+{
+    run(text.trimmed().isEmpty() ? tr("Macro M%1 cleared").arg(index + 1) : tr("Macro M%1 saved").arg(index + 1), [&] {
+        if (index < 0 || index >= kMacroCount)
+            throw std::runtime_error("macro index out of range");
+        Macro m = text.trimmed().isEmpty() ? Macro{} : parse_macro(text.toStdString());
+        autoBackup();
+        auto set = kb_->macros();
+        set[static_cast<std::size_t>(index)] = m;
+        kb_->set_macros(set);
+    });
+}
+
+void Worker::bindMacro(QVector<int> keys, int layer, int index, int mode)
+{
+    run(tr("Macro M%1 bound").arg(index + 1), [&] {
+        if (index < 0 || index >= kMacroCount || mode < 0 || mode > 255)
+            throw std::runtime_error("bad macro binding");
+        const KeyCode c{KeyCode::Macro, static_cast<std::uint8_t>(index), static_cast<std::uint8_t>(mode)};
+        setKeys(keys, layer, [&](int) { return c; });
     });
 }
 

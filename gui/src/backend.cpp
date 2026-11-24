@@ -25,6 +25,9 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doBackup, worker_, &Worker::backup);
     connect(this, &Backend::doRestore, worker_, &Worker::restore);
     connect(this, &Backend::doStreaming, worker_, &Worker::setStreaming);
+    connect(this, &Backend::doSetMacro, worker_, &Worker::setMacro);
+    connect(this, &Backend::doBindMacro, worker_, &Worker::bindMacro);
+    connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
 
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
         connected_ = on;
@@ -128,3 +131,46 @@ void Backend::applyLight(int effect, int brightness, int speed, const QString& c
 void Backend::backup(const QUrl& file) { emit doBackup(file.toLocalFile()); }
 void Backend::restore(const QUrl& file) { emit doRestore(file.toLocalFile()); }
 void Backend::setStreaming(bool on) { emit doStreaming(on); }
+
+QVariantList Backend::macros() const
+{
+    QVariantList l;
+    for (int i = 0; i < snap_.macroTexts.size(); ++i)
+        l.push_back(QVariantMap{{"steps", snap_.macroSteps.value(i)}, {"bound", snap_.macroBindings.value(i)},
+                                {"text", snap_.macroTexts.value(i)}});
+    return l;
+}
+
+void Backend::editMacro(int index)
+{
+    if (index < 0 || index >= snap_.macroTexts.size())
+        return;
+    macroEditor_.stopRecording();
+    if (snap_.macroTexts[index].isEmpty())
+        macroEditor_.load({});
+    else if (macroEditor_.loadText(snap_.macroTexts[index]))
+        macroEditor_.setModified(false);
+}
+
+void Backend::saveMacro(int index)
+{
+    macroEditor_.stopRecording();
+    emit doSetMacro(index, macroEditor_.text());
+    macroEditor_.setModified(false);
+}
+
+void Backend::clearMacro(int index)
+{
+    macroEditor_.load({});
+    emit doSetMacro(index, QString());
+}
+
+void Backend::bindMacro(int index, int mode)
+{
+    const auto sel = keys_.selectedIndices();
+    if (sel.isEmpty()) {
+        emit message(tr("Select the key(s) for the macro on the keyboard at the top"), true);
+        return;
+    }
+    emit doBindMacro(sel, keys_.layer(), index, mode);
+}

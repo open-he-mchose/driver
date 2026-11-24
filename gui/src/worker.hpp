@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QObject>
+#include <QStringList>
 #include <QString>
 #include <QTimer>
 #include <QVariantMap>
@@ -37,6 +38,9 @@ struct Snapshot {
         QString color;       // stored colour "#rrggbb"
     };
     QVector<Key> keys;       // by matrix index
+    QStringList macroTexts;      // 16 macros in the exact text form (empty = no macro)
+    QVector<int> macroSteps;     // number of steps
+    QStringList macroBindings;   // keys bound to each macro in the active profile, e.g. "F10 (once)"
 };
 Q_DECLARE_METATYPE(Snapshot)
 
@@ -54,6 +58,8 @@ public slots:
     void remap(QVector<int> keys, int layer, QString code);         // code as text: "Esc", "Ctrl+C", "Mute", "none" ...
     void assignFactoryOf(QVector<int> keys, int layer, int source); // the factory (base layer) function of key `source`
     void resetToFactory(QVector<int> keys, int layer);              // factory code of each key in that layer
+    void setMacro(int index, QString text);                         // exact text form (format_macro)
+    void bindMacro(QVector<int> keys, int layer, int index, int mode);   // mode: 0 hold, 1-254 times, 255 toggle
     void applyLight(int effect, int brightness, int speed, QString color);
     void backup(QString path);
     void restore(QString path);

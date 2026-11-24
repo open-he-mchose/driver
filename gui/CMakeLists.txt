@@ -12,6 +12,8 @@ qt_add_executable(mchose-gui
   src/backend.hpp
   src/keymodel.cpp
   src/keymodel.hpp
+  src/macromodel.cpp
+  src/macromodel.hpp
   src/worker.cpp
   src/worker.hpp
 )
@@ -24,6 +26,7 @@ qt_add_qml_module(mchose-gui
     qml/KeyboardView.qml
     qml/TriggerPanel.qml
     qml/KeymapPanel.qml
+    qml/MacroPanel.qml
     qml/LightingPanel.qml
     qml/DevicePanel.qml
 )

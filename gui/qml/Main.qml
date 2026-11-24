@@ -82,8 +82,8 @@ ApplicationWindow {
             id: kbd
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
-            overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex === 1 ? "mapping"
-                   : tabs.currentIndex === 2 ? "color" : "depth"
+            overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 2 ? "mapping"
+                   : tabs.currentIndex === 3 ? "color" : "depth"
             enabled: backend.connected
             opacity: backend.connected ? 1 : 0.4
         }
@@ -93,10 +93,11 @@ ApplicationWindow {
             spacing: 8
             TabBar {
                 id: tabs
-                Layout.preferredWidth: 520
+                Layout.preferredWidth: 620
                 currentIndex: win.startTab
                 TabButton { text: qsTr("Actuation") }
                 TabButton { text: qsTr("Keymap") }
+                TabButton { text: qsTr("Macros") }
                 TabButton { text: qsTr("Lighting") }
                 TabButton { text: qsTr("Device") }
             }
@@ -117,6 +118,7 @@ ApplicationWindow {
             currentIndex: tabs.currentIndex
             TriggerPanel {}
             KeymapPanel {}
+            MacroPanel {}
             LightingPanel {}
             DevicePanel {}
         }

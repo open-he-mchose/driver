@@ -9,6 +9,7 @@
 #include <QVariantList>
 
 #include "keymodel.hpp"
+#include "macromodel.hpp"
 #include "worker.hpp"
 
 class Backend : public QObject {
@@ -27,6 +28,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString lightColor READ lightColor NOTIFY snapshotChanged)
     Q_PROPERTY(QStringList effectNames READ effectNames CONSTANT)
     Q_PROPERTY(KeyModel* keys READ keys CONSTANT)
+    Q_PROPERTY(MacroModel* macroEditor READ macroEditor CONSTANT)
+    Q_PROPERTY(QVariantList macros READ macros NOTIFY snapshotChanged)   // [{steps, bound, text}] for M1..M16
     Q_PROPERTY(QString version READ version CONSTANT)
 public:
     explicit Backend(QObject* parent = nullptr);
@@ -46,6 +49,8 @@ public:
     QString lightColor() const { return snap_.lightColor; }
     QStringList effectNames() const;
     KeyModel* keys() { return &keys_; }
+    MacroModel* macroEditor() { return &macroEditor_; }
+    QVariantList macros() const;
     QString version() const { return QStringLiteral(MCHOSE_VERSION); }
 
     Q_INVOKABLE void connectDevice();
@@ -59,6 +64,10 @@ public:
     Q_INVOKABLE void backup(const QUrl& file);
     Q_INVOKABLE void restore(const QUrl& file);
     Q_INVOKABLE void setStreaming(bool on);
+    Q_INVOKABLE void editMacro(int index);               // load M(index+1) into macroEditor
+    Q_INVOKABLE void saveMacro(int index);               // write the editor's steps
+    Q_INVOKABLE void clearMacro(int index);
+    Q_INVOKABLE void bindMacro(int index, int mode);     // to the selected keys in the current layer
 
 signals:
     void connectedChanged();
@@ -79,11 +88,14 @@ signals:
     void doBackup(QString path);
     void doRestore(QString path);
     void doStreaming(bool on);
+    void doSetMacro(int index, QString text);
+    void doBindMacro(QVector<int> keys, int layer, int index, int mode);
 
 private:
     QThread thread_;
     Worker* worker_ = nullptr;
     KeyModel keys_;
+    MacroModel macroEditor_;
     Snapshot snap_;
     bool connected_ = false;
     bool busy_ = false;
