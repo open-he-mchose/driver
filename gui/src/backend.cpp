@@ -97,7 +97,7 @@ void Backend::remapSelected(const QString& code)
         emit message(tr("Select the keys to change first (on the keyboard at the top)"), true);
         return;
     }
-    emit doRemap(sel, code);
+    emit doRemap(sel, keys_.layer(), code);
 }
 
 void Backend::assignFactoryOf(int sourceMatrixIndex)
@@ -107,7 +107,7 @@ void Backend::assignFactoryOf(int sourceMatrixIndex)
         emit message(tr("Select the keys to change first (on the keyboard at the top)"), true);
         return;
     }
-    emit doAssignFactory(sel, sourceMatrixIndex);
+    emit doAssignFactory(sel, keys_.layer(), sourceMatrixIndex);
 }
 
 void Backend::resetSelected()
@@ -117,7 +117,7 @@ void Backend::resetSelected()
         emit message(tr("Select the keys to reset first"), true);
         return;
     }
-    emit doReset(sel);
+    emit doReset(sel, keys_.layer());
 }
 
 void Backend::applyLight(int effect, int brightness, int speed, const QString& color)

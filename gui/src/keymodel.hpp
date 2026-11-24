@@ -13,10 +13,11 @@ class KeyModel : public QAbstractListModel {
     Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectionChanged)
     Q_PROPERTY(double widthUnits READ widthUnits CONSTANT)
     Q_PROPERTY(double heightUnits READ heightUnits CONSTANT)
+    Q_PROPERTY(int layer READ layer WRITE setLayer NOTIFY layerChanged)   // keymap layer shown by the mapping roles
 public:
     enum Role {
         IndexRole = Qt::UserRole + 1, LabelRole, XRole, YRole, WRole, MappingRole, ActuationRole, ModeRole,
-        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole, RemappedRole
+        PressRole, ReleaseRole, ColorRole, DepthRole, PressedRole, SelectedRole, RemappedRole, DangerousRole
     };
 
     explicit KeyModel(QObject* parent = nullptr);
@@ -39,9 +40,12 @@ public:
     int selectedCount() const;
     double widthUnits() const { return width_; }
     double heightUnits() const { return height_; }
+    int layer() const { return layer_; }
+    void setLayer(int l);
 
 signals:
     void selectionChanged();
+    void layerChanged();
 
 private:
     struct Item {
@@ -54,4 +58,5 @@ private:
     QVector<Item> keys_;
     QVector<int> rowOfIndex_;   // matrix index -> row
     double width_ = 16, height_ = 6.25;
+    int layer_ = 0;
 };

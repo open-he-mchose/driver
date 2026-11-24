@@ -109,9 +109,10 @@ void Worker::connectDevice()
         transport_ = std::make_unique<hid::HidapiTransport>(chosen->path);
         kb_ = std::make_unique<Keyboard>(*transport_, *chosen->model);
         factoryIndex_.clear();
-        factory_ = kb_->factory_keymap(0);
+        for (int l = 0; l < 4 && l < kb_->model().layers; ++l)
+            factory_[static_cast<std::size_t>(l)] = kb_->factory_keymap(l);
         for (int i = 0; i < kb_->model().keys; ++i)
-            factoryIndex_[factory_[static_cast<std::size_t>(i)].bytes()] = i;
+            factoryIndex_[factory_[0][static_cast<std::size_t>(i)].bytes()] = i;
         backedUp_ = false;
         emit connectedChanged(true, QString::fromStdString(chosen->model->name));
         refresh();
@@ -145,15 +146,25 @@ void Worker::refresh()
         s.lightSpeed = fc.light_speed();
         auto c = fc.light_color();
         s.lightColor = hex_color(c[0], c[1], c[2]);
-        auto km = kb_->keymap(s.activeProfile, 0);
+        std::array<std::vector<KeyCode>, 4> km;
+        for (int l = 0; l < 4 && l < m.layers; ++l)
+            km[static_cast<std::size_t>(l)] = kb_->keymap(s.activeProfile, l);
         auto tr = kb_->triggers(s.activeProfile);
         auto colors = kb_->colors(s.activeProfile);
         const double unit = m.distance_unit_um / 1000.0;
         for (int i = 0; i < m.keys; ++i) {
             const auto k = static_cast<std::size_t>(i);
             Snapshot::Key key;
-            key.mapping = QString::fromStdString(to_string(km[k]));
-            key.remapped = k < factory_.size() && km[k] != forProfile(factory_[k], s.activeProfile);            key.actuation = tr[k].actuation() * unit;
+            for (std::size_t l = 0; l < 4; ++l) {
+                if (km[l].empty())
+                    continue;
+                const KeyCode code = km[l][k];
+                const bool transparent = l > 0 && code == KeyCode{KeyCode::Keyboard, 0, 0};
+                key.mapping[l] = transparent ? QString() : QString::fromStdString(to_string(code));
+                key.remapped[l] = k < factory_[l].size() && code != forProfile(factory_[l][k], s.activeProfile);
+                key.dangerous[l] = code.is_dangerous();
+            }
+            key.actuation = tr[k].actuation() * unit;
             key.rtPress = tr[k].rt_press() * unit;
             key.rtRelease = tr[k].rt_release() * unit;
             key.mode = static_cast<int>(tr[k].mode());
@@ -210,43 +221,50 @@ void Worker::applyTrigger(QVector<int> keys, double actuation, int mode, double 
     });
 }
 
-void Worker::setKeys(const QVector<int>& keys, const std::function<KeyCode(int)>& codeFor)
+void Worker::setKeys(const QVector<int>& keys, int layer, const std::function<KeyCode(int)>& codeFor, bool allowDangerous)
 {
+    if (layer < 0 || layer >= kb_->model().layers)
+        throw std::runtime_error("layer out of range");
     autoBackup();
     const int p = kb_->active_profile();
-    auto current = kb_->keymap(p, 0);
+    auto current = kb_->keymap(p, layer);
+    WriteOptions opt;
+    opt.allow_dangerous = allowDangerous;
     for (int k : keys) {
         const KeyCode c = codeFor(k);
         if (current[static_cast<std::size_t>(k)] != c)
-            kb_->set_key(p, 0, k, c);
+            kb_->set_key(p, layer, k, c, opt);
     }
 }
 
-void Worker::remap(QVector<int> keys, QString code)
+void Worker::remap(QVector<int> keys, int layer, QString code)
 {
     run(tr("Key mapping written"), [&] {
         auto c = parse_keycode(code.toStdString());
         if (!c)
             throw std::runtime_error("unknown key code '" + code.toStdString() + "'");
-        setKeys(keys, [&](int) { return *c; });
+        setKeys(keys, layer, [&](int) { return *c; });
     });
 }
 
-void Worker::assignFactoryOf(QVector<int> keys, int source)
+void Worker::assignFactoryOf(QVector<int> keys, int layer, int source)
 {
     run(tr("Key mapping written"), [&] {
-        if (source < 0 || source >= static_cast<int>(factory_.size()))
+        if (source < 0 || source >= static_cast<int>(factory_[0].size()))
             throw std::runtime_error("unknown source key");
-        const KeyCode c = forProfile(factory_[static_cast<std::size_t>(source)], kb_->active_profile());
-        setKeys(keys, [&](int) { return c; });
+        const KeyCode c = forProfile(factory_[0][static_cast<std::size_t>(source)], kb_->active_profile());
+        setKeys(keys, layer, [&](int) { return c; });
     });
 }
 
-void Worker::resetToFactory(QVector<int> keys)
+void Worker::resetToFactory(QVector<int> keys, int layer)
 {
     run(tr("Default mapping restored"), [&] {
         const int p = kb_->active_profile();
-        setKeys(keys, [&](int k) { return forProfile(factory_[static_cast<std::size_t>(k)], p); });
+        const auto& f = factory_[static_cast<std::size_t>(layer)];
+        // The factory Fn layer holds the reset codes (Fn+Esc, Fn+Backspace): restoring them is restoring the
+        // keyboard's own defaults, so they are allowed here.
+        setKeys(keys, layer, [&](int k) { return forProfile(f[static_cast<std::size_t>(k)], p); }, true);
     });
 }
 

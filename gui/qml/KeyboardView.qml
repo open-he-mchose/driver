@@ -64,6 +64,7 @@ Item {
             required property bool pressed
             required property bool selected
             required property bool remapped
+            required property bool dangerous
 
             x: root.ox + kx * root.u + 2
             y: 4 + ky * root.u + 2
@@ -119,13 +120,17 @@ Item {
                 color: (root.overlay === "mapping" && key.remapped) || (root.overlay === "actuation" && key.mode > 0)
                        ? palette.highlight : palette.placeholderText
                 text: root.overlay === "actuation" ? key.actuation.toFixed(2)
-                    : root.overlay === "mapping" ? (key.remapped ? key.mapping : "")
+                    : root.overlay === "mapping" ? ((key.dangerous ? "⚠ " : "") + (key.remapped || key.dangerous || backend.keys.layer > 0 ? key.mapping : ""))
                     : root.overlay === "depth" ? (key.depth > 0 ? key.depth.toFixed(2) : "")
                     : ""
             }
+            ToolTip.visible: tipArea.containsMouse && !root.picker && root.overlay === "mapping" && key.mapping.length > 0
+            ToolTip.text: key.mapping
+            ToolTip.delay: 400
             MouseArea {
+                id: tipArea
                 anchors.fill: parent
-                hoverEnabled: root.picker
+                hoverEnabled: true
                 cursorShape: root.picker ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: (m) => {
                     if (root.picker) root.picked(key.matrixIndex)

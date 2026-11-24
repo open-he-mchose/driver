@@ -72,9 +72,9 @@ signals:
     void doRefresh();
     void doSwitch(int profile);
     void doTrigger(QVector<int> keys, double actuation, int mode, double press, double release);
-    void doRemap(QVector<int> keys, QString code);
-    void doAssignFactory(QVector<int> keys, int source);
-    void doReset(QVector<int> keys);
+    void doRemap(QVector<int> keys, int layer, QString code);
+    void doAssignFactory(QVector<int> keys, int layer, int source);
+    void doReset(QVector<int> keys, int layer);
     void doLight(int effect, int brightness, int speed, QString color);
     void doBackup(QString path);
     void doRestore(QString path);

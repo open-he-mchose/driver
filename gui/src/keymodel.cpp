@@ -62,7 +62,7 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case XRole: return k.cap.x;
     case YRole: return k.cap.y;
     case WRole: return k.cap.w;
-    case MappingRole: return k.settings.mapping;
+    case MappingRole: return k.settings.mapping[static_cast<std::size_t>(layer_)];
     case ActuationRole: return k.settings.actuation;
     case ModeRole: return k.settings.mode;
     case PressRole: return k.settings.rtPress;
@@ -71,7 +71,8 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case DepthRole: return k.depth;
     case PressedRole: return k.pressed;
     case SelectedRole: return k.selected;
-    case RemappedRole: return k.settings.remapped;
+    case RemappedRole: return k.settings.remapped[static_cast<std::size_t>(layer_)];
+    case DangerousRole: return k.settings.dangerous[static_cast<std::size_t>(layer_)];
     default: return {};
     }
 }
@@ -81,7 +82,8 @@ QHash<int, QByteArray> KeyModel::roleNames() const
     return {{IndexRole, "matrixIndex"}, {LabelRole, "label"},    {XRole, "kx"},           {YRole, "ky"},
             {WRole, "kw"},              {MappingRole, "mapping"}, {ActuationRole, "actuation"}, {ModeRole, "mode"},
             {PressRole, "rtPress"},     {ReleaseRole, "rtRelease"}, {ColorRole, "keyColor"}, {DepthRole, "depth"},
-            {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"}};
+            {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"},
+            {DangerousRole, "dangerous"}};
 }
 
 void KeyModel::select(int row, bool add)
@@ -130,10 +132,24 @@ QVariantMap KeyModel::firstSelected() const
 {
     for (const auto& k : keys_)
         if (k.selected)
-            return {{"label", QString::fromUtf8(k.cap.label)}, {"mapping", k.settings.mapping}, {"remapped", k.settings.remapped},
+            return {{"label", QString::fromUtf8(k.cap.label)},
+                    {"mapping", k.settings.mapping[static_cast<std::size_t>(layer_)]},
+                    {"remapped", k.settings.remapped[static_cast<std::size_t>(layer_)]},
+                    {"dangerous", k.settings.dangerous[static_cast<std::size_t>(layer_)]},
                     {"actuation", k.settings.actuation}, {"mode", k.settings.mode},
                     {"rtPress", k.settings.rtPress}, {"rtRelease", k.settings.rtRelease}, {"color", k.settings.color}};
     return {};
+}
+
+void KeyModel::setLayer(int l)
+{
+    if (l < 0 || l > 3 || l == layer_)
+        return;
+    layer_ = l;
+    if (!keys_.isEmpty())
+        emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {MappingRole, RemappedRole, DangerousRole});
+    emit layerChanged();
+    emit selectionChanged();   // panels re-read firstSelected()
 }
 
 QVector<int> KeyModel::selectedIndices() const

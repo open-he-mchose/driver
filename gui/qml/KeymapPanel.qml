@@ -21,11 +21,27 @@ Pane {
             Layout.preferredWidth: 300
             Layout.alignment: Qt.AlignTop
             spacing: 6
+            TabBar {
+                Layout.fillWidth: true
+                currentIndex: backend.keys.layer
+                onCurrentIndexChanged: backend.keys.layer = currentIndex
+                TabButton { text: qsTr("Base") }
+                TabButton { text: qsTr("Fn") }
+                TabButton { text: qsTr("Mac") }
+                TabButton { text: qsTr("Mac Fn") }
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: panel.current.dangerous === true
+                wrapMode: Text.WordWrap
+                font.bold: true
+                text: qsTr("⚠ This key resets the keyboard when held for 3 s (factory or calibration reset).")
+            }
             Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 text: backend.keys.selectedCount === 0
-                      ? qsTr("1. Select the key(s) to change on the keyboard at the top.\n2. Click the new function on the small keyboard, or use a button below.")
+                      ? qsTr("Select keys above, then pick their new function.")
                       : backend.keys.selectedCount === 1
                         ? (panel.current.remapped ? qsTr("%1 → %2 (changed)").arg(panel.current.label).arg(panel.current.mapping)
                                                   : qsTr("%1: default function (%2)").arg(panel.current.label).arg(panel.current.mapping))
