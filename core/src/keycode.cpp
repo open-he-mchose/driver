@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdio>
 #include <stdexcept>
 #include <string_view>
@@ -93,10 +94,10 @@ std::string trim(const std::string& s)
 std::optional<std::uint8_t> modifier_bit(const std::string& name)
 {
     const std::string n = lower(name);
-    if (n == "ctrl" || n == "control") return 0x01;
-    if (n == "shift") return 0x02;
-    if (n == "alt") return 0x04;
-    if (n == "gui" || n == "win" || n == "super" || n == "cmd") return 0x08;
+    if (n == "ctrl" || n == "control") return std::uint8_t{0x01};
+    if (n == "shift") return std::uint8_t{0x02};
+    if (n == "alt") return std::uint8_t{0x04};
+    if (n == "gui" || n == "win" || n == "super" || n == "cmd") return std::uint8_t{0x08};
     for (int i = 0; i < 8; ++i)
         if (n == lower(kModifiers[i]))
             return static_cast<std::uint8_t>(1u << i);
@@ -109,9 +110,9 @@ std::optional<std::uint8_t> usage_by_name(const std::string& name)
     for (const auto& u : kUsages)
         if (lower(u.name) == n)
             return u.usage;
-    if (n == "return") return 0x28;
-    if (n == "escape") return 0x29;
-    if (n == "del") return 0x4C;
+    if (n == "return") return std::uint8_t{0x28};
+    if (n == "escape") return std::uint8_t{0x29};
+    if (n == "del") return std::uint8_t{0x4C};
     return std::nullopt;
 }
 

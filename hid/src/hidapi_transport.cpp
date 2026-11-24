@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cwchar>
 #include <stdexcept>
+#include <utility>
 
 namespace mchose::hid {
 

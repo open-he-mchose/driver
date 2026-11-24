@@ -3,6 +3,7 @@
 // validates checksums and can inject unsolicited reports before replies.
 #pragma once
 
+#include <algorithm>
 #include <deque>
 #include <map>
 #include <vector>

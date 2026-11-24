@@ -2,7 +2,9 @@
 #include "mchose/glw/macro.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <stdexcept>
+#include <string>
 
 namespace mchose::glw {
 

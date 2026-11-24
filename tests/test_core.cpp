@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Golden values come from the protocol documentation (https://open-he-mchose.github.io/), where they were
 // verified on a Jet75-II.
+#include <algorithm>
 #include <array>
+#include <initializer_list>
 #include <vector>
 
 #include "check.hpp"
