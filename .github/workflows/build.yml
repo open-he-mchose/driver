@@ -44,3 +44,14 @@ jobs:
         with:
           name: mchosectl-${{ runner.os }}
           path: dist/
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure (core tests only, ASan + UBSan)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMCHOSE_BUILD_CLI=OFF -DMCHOSE_SANITIZE=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

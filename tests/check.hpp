@@ -54,8 +54,8 @@ inline void fail(const char* file, int line, const std::string& msg)
 
 #define CHECK_EQ(a, b)                                                              \
     do {                                                                            \
-        auto&& check_a_ = (a);                                                      \
-        auto&& check_b_ = (b);                                                      \
+        const auto check_a_ = (a); /* copies: no references into temporaries */     \
+        const auto check_b_ = (b);                                                  \
         if (!(check_a_ == check_b_)) {                                              \
             std::ostringstream check_os_;                                           \
             check_os_ << #a " == " #b " (" << check_a_ << " vs " << check_b_ << ")"; \

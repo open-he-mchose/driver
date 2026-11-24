@@ -9,6 +9,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(MCHOSE_BUILD_CLI "Build the hid transport and the mchosectl command-line tool" ON)
 option(MCHOSE_BUILD_TESTS "Build the unit tests (core only, no keyboard needed)" ON)
 option(MCHOSE_FETCH_HIDAPI "Download and build hidapi if it is not installed" ON)
+option(MCHOSE_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
+
+if(MCHOSE_SANITIZE AND NOT MSVC)
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
+  add_link_options(-fsanitize=address,undefined)
+endif()
 
 if(MSVC)
   add_compile_options(/W4 /permissive- /utf-8)
