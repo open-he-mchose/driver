@@ -16,6 +16,7 @@
 #include <chrono>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "json.hpp"
@@ -41,12 +42,18 @@ reading
   macros                             stored macros and the keys bound to them
 
 writing (every write is saved to the keyboard's flash; a full backup is made first)
-  profile N                          switch the active profile
+  profile [N]                        show the rotation / switch the active profile
+  profile rotation P...              profiles reachable with the next-profile key, in order (e.g. 0 1 2)
+  profile copy SRC DST               copy settings, keymaps, colours and advanced keys
+  rate [1000|2000|4000|8000]         show / set the report rate (global; the keyboard reboots)
   remap KEY CODE [--layer L]         map KEY (name like CapsLock, or #INDEX) to CODE
                                      (Esc, Ctrl+Shift+T, Mute, none, or raw hex "10 00 29")
   trigger set KEY... [--actuation MM] [--press MM] [--release MM] [--rt off|on|continuous]
                                      KEY = name, index or "all"
-  light set [--effect N] [--brightness 0-100] [--speed 0-4] [--color RRGGBB]
+  light [set] [--effect NAME|N] [--brightness 0-100] [--speed 0-4] [--color RRGGBB]
+  light effects                      effect names
+  light color KEY... RRGGBB          stored per-key colours (shown by the static effect); KEY may be "all"
+  light live RRGGBB|rainbow [--seconds N]   live colours, RAM only (no flash writes)
   macro set N "TEXT" [--delay MS]    store macro N (1-16), e.g. "Ctrl+C", "+LShift +A 50ms -A -LShift",
                                      "\"text to type\"", "wait 200ms"; delays are after the previous action
   macro clear N|all
@@ -260,6 +267,25 @@ public:
         return *kb_;
     }
 
+    // After a reboot of the keyboard: wait until it is back and open it again.
+    void reconnect()
+    {
+        kb_.reset();
+        transport_.reset();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        for (int i = 0; i < 40; ++i) {
+            try {
+                kb().info();
+                return;
+            } catch (const std::exception&) {
+                kb_.reset();
+                transport_.reset();
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
+        }
+        throw std::runtime_error("keyboard did not come back after the reboot");
+    }
+
     WriteOptions write_options() const
     {
         WriteOptions o;
@@ -338,6 +364,9 @@ private:
     bool backed_up_ = false;
 };
 
+std::atomic<bool> g_stop{false};
+void on_signal(int) { g_stop = true; }
+
 int cmd_list()
 {
     auto devs = hid::enumerate();
@@ -381,12 +410,40 @@ int cmd_info(Tool& t)
 
 int cmd_profile(Tool& t)
 {
-    if (t.args_.pos.size() < 2) {
-        std::cout << t.kb().active_profile() << "\n";
+    const auto& pos = t.args_.pos;
+    auto& kb = t.kb();
+    auto log = [](const std::string& m) { std::cout << m << "\n"; };
+    if (pos.size() < 2) {
+        auto b = kb.base_info();
+        std::cout << "active profile " << b.runtime_profile() << "; rotation (next-profile key):";
+        for (int i = 0; i < b.length() && i < 4; ++i)
+            std::cout << " " << int(b.order(i));
+        std::cout << "\n";
         return 0;
     }
-    const int p = to_int(t.args_.pos[1], "profile");
-    t.kb().switch_profile(p, t.write_options());   // base info only; no backup needed
+    if (pos[1] == "rotation") {
+        std::vector<int> list;
+        for (std::size_t i = 2; i < pos.size(); ++i)
+            list.push_back(to_int(pos[i], "profile"));
+        kb.set_rotation(list, log);   // base info only; no backup needed
+        auto b = kb.base_info();
+        std::cout << "rotation:";
+        for (int i = 0; i < b.length(); ++i)
+            std::cout << " " << int(b.order(i));
+        std::cout << "; active profile " << b.runtime_profile() << "\n";
+        return 0;
+    }
+    if (pos[1] == "copy") {
+        if (pos.size() != 4)
+            throw std::runtime_error("usage: profile copy SRC DST");
+        const int src = to_int(pos[2], "profile"), dst = to_int(pos[3], "profile");
+        t.before_write();
+        kb.copy_profile(src, dst, log, t.write_options());
+        std::cout << "profile " << src << " copied to " << dst << "\n";
+        return 0;
+    }
+    const int p = to_int(pos[1], "profile");
+    kb.switch_profile(p, t.write_options());   // base info only; no backup needed
     std::cout << "active profile: " << p << "\n";
     return 0;
 }
@@ -476,28 +533,146 @@ int cmd_trigger(Tool& t)
     return 0;
 }
 
+const char* kEffects[] = {"static", "aurora-mapping", "shadow-steps", "tranquility", "pulsation", "flower-dance",
+                          "tidal-rhythm", "surging-tide", "colorful-fountain", "galaxy-roaming", "spiral", "surge-rhythm",
+                          "ocean", "ripple-dance", "ripple", "instant-flash", "matrix-shadows", "melody-piano", "flow-dance",
+                          "raining", "stars", "fireworks", "ripple-flow"};   // ids 0-22 offered for the Jet75-II
+
+std::string effect_name(int id)
+{
+    if (id >= 0 && id < static_cast<int>(std::size(kEffects)))
+        return kEffects[id];
+    return id == 255 ? "off" : "effect " + std::to_string(id);
+}
+
+std::uint8_t parse_effect(const std::string& s)
+{
+    if (s == "off")
+        return 255;
+    for (std::size_t i = 0; i < std::size(kEffects); ++i)
+        if (s == kEffects[i])
+            return static_cast<std::uint8_t>(i);
+    const int v = to_int(s, "effect");
+    if (v < 0 || v > 255)
+        throw std::runtime_error("effect out of range");
+    return static_cast<std::uint8_t>(v);
+}
+
+std::array<std::uint8_t, 3> parse_rgb(const std::string& s)
+{
+    auto c = from_hex(s.size() == 7 && s[0] == '#' ? s.substr(1) : s);
+    if (c.size() != 3)
+        throw std::runtime_error("colour must be RRGGBB, got '" + s + "'");
+    return {c[0], c[1], c[2]};
+}
+
+std::array<std::uint8_t, 3> hsv(double h, double v)
+{
+    const double c = v, x = c * (1 - std::fabs(std::fmod(h / 60.0, 2) - 1));
+    double r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    return {static_cast<std::uint8_t>(r * 255), static_cast<std::uint8_t>(g * 255), static_cast<std::uint8_t>(b * 255)};
+}
+
 int cmd_light(Tool& t)
 {
     auto& kb = t.kb();
+    const auto& pos = t.args_.pos;
+    const std::string sub = pos.size() >= 2 ? pos[1] : "show";
+    if (sub == "effects") {
+        for (std::size_t i = 0; i < std::size(kEffects); ++i)
+            std::printf("%3zu  %s\n", i, kEffects[i]);
+        std::printf("255  off\n");
+        return 0;
+    }
     const int p = t.profile();
+    if (sub == "color" || sub == "colour") {
+        if (pos.size() < 4)
+            throw std::runtime_error("usage: light color KEY... RRGGBB   (KEY = name, #INDEX or all)");
+        const auto rgb = parse_rgb(pos.back());
+        auto colors = kb.colors(p);
+        for (std::size_t i = 2; i + 1 < pos.size(); ++i) {
+            if (pos[i] == "all")
+                for (int k = 0; k < kb.model().keys; ++k)
+                    colors[static_cast<std::size_t>(k)] = rgb;
+            else
+                colors[static_cast<std::size_t>(t.key_index(pos[i]))] = rgb;
+        }
+        t.before_write();
+        kb.set_colors(p, colors);
+        auto fc = kb.funcconfig(p);
+        std::cout << "stored colours written to profile " << p << "\n";
+        if (fc.light_effect() != 0)
+            std::cout << "note: stored colours show with the static effect: mchosectl light set --effect static\n";
+        return 0;
+    }
+    if (sub == "live") {
+        if (pos.size() < 3)
+            throw std::runtime_error("usage: light live RRGGBB|rainbow [--seconds N]   (RAM only, no flash)");
+        const double seconds = std::stod(t.args_.get("--seconds", "10"));
+        std::signal(SIGINT, on_signal);
+        const int n = kb.model().keys;
+        const auto start = std::chrono::steady_clock::now();
+        std::vector<std::array<std::uint8_t, 3>> frame(static_cast<std::size_t>(n));
+        while (!g_stop) {
+            const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            if (el >= seconds)
+                break;
+            for (int k = 0; k < n; ++k)
+                frame[static_cast<std::size_t>(k)] = pos[2] == "rainbow" ? hsv(std::fmod(el * 90 + k * 9, 360), 1.0) : parse_rgb(pos[2]);
+            kb.live_colors(frame);
+            std::this_thread::sleep_for(std::chrono::milliseconds(40));   // ~25 frames per second
+        }
+        std::cout << "live colours stopped; the keyboard returns to its effect in a few seconds\n";
+        return 0;
+    }
     FuncConfig fc = kb.funcconfig(p);
-    if (t.args_.pos.size() >= 2 && t.args_.pos[1] == "set") {
-        if (t.args_.opt.count("--effect")) fc.set_light_effect(static_cast<std::uint8_t>(to_int(t.args_.get("--effect"), "effect")));
+    if (sub == "set") {
+        if (t.args_.opt.count("--effect")) fc.set_light_effect(parse_effect(t.args_.get("--effect")));
         if (t.args_.opt.count("--brightness")) fc.set_light_brightness(static_cast<std::uint8_t>(to_int(t.args_.get("--brightness"), "brightness")));
         if (t.args_.opt.count("--speed")) fc.set_light_speed(static_cast<std::uint8_t>(to_int(t.args_.get("--speed"), "speed")));
         if (t.args_.opt.count("--color")) {
-            auto c = from_hex(t.args_.get("--color"));
-            if (c.size() != 3)
-                throw std::runtime_error("--color needs RRGGBB");
+            auto c = parse_rgb(t.args_.get("--color"));
             fc.set_light_color(c[0], c[1], c[2]);
         }
         t.before_write();
         kb.set_funcconfig(p, fc, t.write_options());
     }
     auto c = fc.light_color();
-    std::printf("profile %d: effect %d, brightness %d, speed %d, colour %02x%02x%02x\n", p, fc.light_effect(),
-                fc.light_brightness(), fc.light_speed(), c[0], c[1], c[2]);
+    std::printf("profile %d: effect %s (%d), brightness %d, speed %d, colour %02x%02x%02x\n", p,
+                effect_name(fc.light_effect()).c_str(), fc.light_effect(), fc.light_brightness(), fc.light_speed(), c[0], c[1], c[2]);
     return 0;
+}
+
+int cmd_rate(Tool& t)
+{
+    auto& kb = t.kb();
+    const int p = kb.active_profile();
+    auto show = [](std::uint8_t v) { auto hz = report_rate_hz(v); return hz ? std::to_string(*hz) + " Hz" : "value " + std::to_string(v); };
+    const std::uint8_t cur = kb.funcconfig(p).report_rate();
+    if (t.args_.pos.size() < 2) {
+        std::cout << "report rate: " << show(cur) << " (global: profile switches keep it)\n";
+        return 0;
+    }
+    const int hz = to_int(t.args_.pos[1], "rate");
+    std::uint8_t value = 0;
+    for (std::uint8_t v = 1; v <= 4; ++v)
+        if (report_rate_hz(v) == hz)
+            value = v;
+    if (!value)
+        throw std::runtime_error("rate must be 1000, 2000, 4000 or 8000");
+    if (value == cur) {
+        std::cout << "report rate already " << show(cur) << "\n";
+        return 0;
+    }
+    t.before_write();
+    std::cout << "setting " << hz << " Hz; the keyboard reboots...\n";
+    kb.set_report_rate_and_reboot(value);
+    t.reconnect();
+    const std::uint8_t now = t.kb().funcconfig(t.kb().active_profile()).report_rate();
+    std::cout << "report rate now: " << show(now) << "\n";
+    return now == value ? 0 : 1;
 }
 
 // Keys bound to macros in all layers of a profile: macro index -> "layer/key mode" list.
@@ -809,8 +984,6 @@ int cmd_restore(Tool& t)
     return 0;
 }
 
-std::atomic<bool> g_stop{false};
-void on_signal(int) { g_stop = true; }
 
 // Turns the depth stream off again on every way out of cmd_depth (Ctrl+C, errors).
 struct DepthStreamGuard {
@@ -877,6 +1050,7 @@ int main(int argc, char** argv)
         if (c == "macros") return cmd_macros(t);
         if (c == "macro") return cmd_macro(t);
         if (c == "adv") return cmd_adv(t);
+        if (c == "rate") return cmd_rate(t);
         if (c == "backup") return cmd_backup(t);
         if (c == "restore") return cmd_restore(t);
         if (c == "depth") return cmd_depth(t);

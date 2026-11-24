@@ -447,3 +447,62 @@ TEST(adv_modtap_toggle_dks)
     CHECK(k.keymap(0, 1)[21] == (KeyCode{KeyCode::Keyboard, 0, 0}));   // other layers become transparent
     CHECK_THROWS(k.bind_mod_tap(0, 0, 23, {}, {}, 5), std::invalid_argument);
 }
+
+TEST(profile_copy_adjusts_fn_layers)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    k.set_key(0, 0, 37, KeyCode{0xF0, 0xFF, 0x01});          // Fn -> layer 1 of profile 0
+    k.set_key(0, 2, 37, KeyCode{0xF0, 0xFF, 0x03});          // Fn on the Mac layer
+    TriggerEntry t = k.triggers(0)[5];
+    t.set_actuation(120);
+    k.set_trigger(0, 5, t);
+    FuncConfig fc = k.funcconfig(0);
+    fc.set_light_effect(12);
+    k.set_funcconfig(0, fc);
+    FuncConfig dst_before = k.funcconfig(3);
+    dst_before.raw[4] = 0x01;                                // destination runs at another rate
+    k.set_funcconfig(3, dst_before);
+
+    k.copy_profile(0, 3);
+    CHECK(k.keymap(3, 0)[37] == (KeyCode{0xF0, 0xFF, 0x0D}));
+    CHECK(k.keymap(3, 2)[37] == (KeyCode{0xF0, 0xFF, 0x0F}));
+    CHECK_EQ(k.triggers(3)[5].actuation(), 120);
+    auto dst = k.funcconfig(3);
+    CHECK_EQ(int(dst.raw[1]), 12);                           // base layer of profile 3
+    CHECK_EQ(int(dst.light_effect()), 12);
+    CHECK_EQ(int(dst.report_rate()), 1);                     // destination's rate kept
+    CHECK_THROWS(k.copy_profile(1, 1), std::invalid_argument);
+}
+
+TEST(profile_rotation)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    k.set_rotation({0, 2, 3});
+    auto b = k.base_info();
+    CHECK_EQ(int(b.length()), 3);
+    CHECK_EQ(int(b.order(0)), 0);
+    CHECK_EQ(int(b.order(1)), 2);
+    CHECK_EQ(int(b.order(3)), 1);                            // the rest keeps a valid permutation
+    CHECK_EQ(b.runtime_profile(), 0);                        // still active
+    CHECK(b.marker_ok());
+    k.set_rotation({3, 1});                                  // active profile 0 not listed: switch to 3
+    CHECK_EQ(k.active_profile(), 3);
+    CHECK_THROWS(k.set_rotation({1, 1}), std::invalid_argument);
+    CHECK_THROWS(k.set_rotation({}), std::invalid_argument);
+}
+
+TEST(restore_coalesces_adjacent_entries)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    auto img = k.backup();
+    for (int key = 0; key < 40; ++key)                       // 40 consecutive keymap entries = 120 bytes
+        img.profiles[1].keymaps[0][static_cast<std::size_t>(3 * key + 2)] = 0x29;
+    const int before = kb.flash_writes;
+    k.restore(img);
+    CHECK_EQ(kb.flash_writes - before, 3);                   // 56 + 56 + 8 bytes, not 40 packets
+    CHECK(k.keymap(1, 0)[39] == (KeyCode{0xF0, 0xF0, 0x29}));   // only the usage byte was changed
+    CHECK_EQ(k.restore(img), 0);
+}

@@ -26,17 +26,27 @@ A Qt GUI will follow in `gui/` (GPL-3.0); `core`, `hid` and `cli` stay MIT.
 ## mchosectl
 
 ```text
-mchosectl list                        connected keyboards
-mchosectl info                        firmware, profiles, report rate, lighting
+mchosectl list | info                 connected keyboards; firmware, profiles, report rate, lighting
 mchosectl keymap [--layer L]          key mapping (also --factory)
+mchosectl remap CapsLock Esc          remap a key (names, Ctrl+Shift+T, Mute, none, raw hex; #N = matrix index)
 mchosectl trigger                     actuation / rapid trigger of every key
-mchosectl macros                      stored macros
-mchosectl profile N                   switch the active profile
-mchosectl remap CapsLock Esc          remap a key (names, Ctrl+Shift+T, Mute, none, raw hex)
 mchosectl trigger set W A S D --actuation 1.2 --rt on --press 0.15 --release 0.15
-mchosectl light set --effect 0 --brightness 60
-mchosectl backup [FILE]               everything except calibration, as JSON
-mchosectl restore FILE                write back only what differs
+mchosectl profile [N]                 show the rotation / switch profile
+mchosectl profile rotation 0 1 2      profiles reachable with the next-profile key
+mchosectl profile copy 0 3            copy a profile (Fn layer numbers adjusted)
+mchosectl rate 8000                   report rate 1000/2000/4000/8000 (global; the keyboard reboots)
+mchosectl light set --effect static --brightness 60
+mchosectl light color W A S D ff0000  stored per-key colours; light effects lists the effects
+mchosectl light live rainbow          live colours (RAM only)
+mchosectl macro set 1 '"Hello!" Enter'          macros: +Key/-Key, Ctrl+C taps, "typed text", 50ms delays
+mchosectl macro bind F10 1 --mode once          once / hold / toggle / COUNT
+mchosectl macros                      stored macros and the keys bound to them
+mchosectl adv socd A D --mode last-input        Snap Tap; also rs, lt
+mchosectl adv mt CapsLock --tap Esc --hold LCtrl --time 200
+mchosectl adv toggle F12 --key LShift
+mchosectl adv dks 1 --action W:1,0,0,0 --action E:0,1,0,0 --action R:0,0,1,0 --action T:0,0,0,1
+mchosectl adv [show|doctor] | adv clear KEY
+mchosectl backup [FILE] | restore FILE          everything except calibration; restore writes only differences
 mchosectl depth                       live key depth (Ctrl+C to stop)
 ```
 
@@ -80,11 +90,11 @@ CI builds for Linux and Windows are attached to every run of the `build` workflo
 
 ## Status and plans
 
-Done: protocol core, profiles, FuncConfig (lighting, report rate, locks), trigger settings, keymap, macros
-(codec), backup / restore, depth stream, safety guards, unit tests.
+Done and tested on a Jet75-II: info, profiles (switch, rotation, copy), report rate, lighting (effects,
+stored and live colours), trigger settings, keymap, macros, advanced keys (DKS, Toggle, Mod-Tap, RS, SOCD, LT,
+doctor), backup / restore, depth stream, safety guards; unit tests and Linux / Windows CI.
 
-Next: macro and advanced-key editing in the CLI, live lighting, precise depth from travel curves, more models,
-releases, then the Qt GUI.
+Next: releases, precise depth from travel curves, more models, then the Qt GUI.
 
 ## License
 

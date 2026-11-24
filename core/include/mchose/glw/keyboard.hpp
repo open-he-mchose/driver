@@ -97,6 +97,14 @@ public:
     void set_macros(const MacroSet& macros);
     void write_raw_table(std::uint8_t write_command, std::uint8_t read_command, int offset, std::span<const std::uint8_t> data);
 
+    // Stored per-key colours (used by the static effect 0). Writes only the keys that differ.
+    void set_colors(int profile, std::span<const std::array<std::uint8_t, 3>> rgb);
+
+    // Change the report rate (FuncConfig byte 4 of the active profile; 1 = 8 kHz, 2 = 4 kHz, 3 = 2 kHz,
+    // 4 = 1 kHz). The keyboard REBOOTS right after the write and disappears for a moment: this object's
+    // transport is unusable afterwards; reconnect and verify with a new Keyboard.
+    void set_report_rate_and_reboot(std::uint8_t value);
+
     // Live colours (RAM only, no flash). rgb[k] = colour of matrix index k.
     void live_colors(std::span<const std::array<std::uint8_t, 3>> rgb);
 
@@ -120,16 +128,30 @@ public:
     std::vector<int> clear_adv(int profile, int layer, int key);
 
     // --- backup / restore ------------------------------------------------------------------------
-    KeyboardImage backup(const std::function<void(const std::string&)>& progress = {});
+    using Log = std::function<void(const std::string&)>;
+    KeyboardImage backup(const Log& progress = {});
     // Writes only what differs; returns the number of write operations. Never changes the report rate of
     // the active profile unless opt.allow_reboot.
-    int restore(const KeyboardImage& image, const std::function<void(const std::string&)>& log = {},
-                const WriteOptions& opt = {});
+    int restore(const KeyboardImage& image, const Log& log = {}, const WriteOptions& opt = {});
+
+    // One profile: everything a backup holds for it. write_profile writes only what differs.
+    ProfileImage read_profile(int profile);
+    void write_profile(int profile, const ProfileImage& image, const Log& log = {}, const WriteOptions& opt = {});
+
+    // --- profiles ---------------------------------------------------------------------------------
+    // Copy settings, keymaps (Fn layer numbers adjusted), colours and advanced keys from src to dst.
+    // The destination keeps its report rate (the rate is global anyway).
+    void copy_profile(int src, int dst, const Log& log = {}, const WriteOptions& opt = {});
+    // Profiles reachable with the next-profile key, in this order. The active profile stays active if it
+    // is in the list; otherwise the keyboard switches to the first one.
+    void set_rotation(const std::vector<int>& profiles, const Log& log = {});
 
 private:
     void count_write(std::size_t n = 1);
     void check_profile(int profile) const;
     void check_key(int key) const;
+    int sync_region(const char* what, int profile, std::uint8_t rd, std::uint8_t wr, int offset,
+                    const std::vector<std::uint8_t>& want, std::size_t entry, const Log& log);
     void check_free(const std::vector<AdvBinding>& bindings, int layer, int key);
     void write_verified(std::uint8_t write_cmd, std::uint8_t read_cmd, int offset, std::span<const std::uint8_t> data);
 
