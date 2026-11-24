@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 (2026-11-25)
 
 - GUI: the keyboard has a fixed size (no longer changes with the window or the tab); the key picker on the Keymap
   tab has a background that fits the keys
