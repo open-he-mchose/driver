@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // mchose-gui — configurator for MCHOSE magnetic keyboards (unofficial).
-#include <QGuiApplication>
+#include <QApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QLibraryInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -9,18 +12,46 @@
 
 #include "backend.hpp"
 
+namespace {
+
+// True if a Qt Quick Controls style module (e.g. "org.kde.desktop") is installed.
+bool qml_module_installed(const QString& uri)
+{
+    QStringList dirs{QLibraryInfo::path(QLibraryInfo::QmlImportsPath)};
+    for (const char* var : {"QML_IMPORT_PATH", "QML2_IMPORT_PATH"})
+        for (const QString& d : qEnvironmentVariable(var).split(QDir::listSeparator(), Qt::SkipEmptyParts))
+            dirs << d;
+    const QString rel = QString(uri).replace('.', '/') + "/qmldir";
+    for (const QString& d : dirs)
+        if (QFileInfo::exists(d + '/' + rel))
+            return true;
+    return false;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[])
 {
-    QGuiApplication app(argc, argv);
-    QGuiApplication::setApplicationName("mchose-gui");
-    QGuiApplication::setOrganizationName("open-he-mchose");
-    QGuiApplication::setApplicationVersion(MCHOSE_VERSION);
-    // Platform style by default (Fusion with the system palette on Linux, the native style on Windows).
-    // Override with --style NAME or QT_QUICK_CONTROLS_STYLE, e.g. Material, Universal, Fusion, Basic.
+    // QApplication (not QGuiApplication): the desktop style draws controls with the system QStyle.
+    QApplication app(argc, argv);
+    QApplication::setApplicationName("mchose-gui");
+    QApplication::setOrganizationName("open-he-mchose");
+    QApplication::setApplicationVersion(MCHOSE_VERSION);
+    // Style: --style NAME, else QT_QUICK_CONTROLS_STYLE, else in a KDE Plasma session the KDE desktop style
+    // if installed (kf6-qqc2-desktop-style: draws with the system QStyle and the KDE colour scheme), else the
+    // platform default (Fusion with the system palette, e.g. from qt6ct, on Linux; the native style on
+    // Windows). Outside Plasma the desktop style takes its colours from kdeglobals, not from qt6ct, and can
+    // clash with the palette, so it is only used there on request (--style org.kde.desktop).
     const QStringList a = QCoreApplication::arguments();
     const int styleArg = static_cast<int>(a.indexOf("--style"));
     if (styleArg >= 0 && styleArg + 1 < a.size())
         QQuickStyle::setStyle(a[styleArg + 1]);
+#ifdef Q_OS_LINUX
+    else if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE") &&
+             qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("KDE", Qt::CaseInsensitive) &&
+             qml_module_installed("org.kde.desktop"))
+        QQuickStyle::setStyle("org.kde.desktop");
+#endif
 
     Backend backend;
     QQmlApplicationEngine engine;
