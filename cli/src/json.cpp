@@ -155,7 +155,7 @@ struct Parser {
             ws();
             std::string k = string();
             if (!eat(':')) error("expected :");
-            o[k] = value();
+            o.emplace_back(std::move(k), value());
         } while (eat(','));
         if (!eat('}')) error("expected }");
         return Value(std::move(o));

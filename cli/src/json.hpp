@@ -3,7 +3,7 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
+#include <utility>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -13,7 +13,8 @@
 namespace json {
 
 struct Value;
-using Object = std::map<std::string, Value>;
+// Vector of pairs instead of std::map: std::map of an incomplete type is not portable (MSVC); keeps key order.
+using Object = std::vector<std::pair<std::string, Value>>;
 using Array = std::vector<Value>;
 
 struct Value {
@@ -33,15 +34,20 @@ struct Value {
     const Array& arr() const { return get<Array>("array"); }
     const std::string& str() const { return get<std::string>("string"); }
     int num() const { return static_cast<int>(get<double>("number")); }
+    const Value* find(const std::string& key) const
+    {
+        for (const auto& kv : obj())
+            if (kv.first == key)
+                return &kv.second;
+        return nullptr;
+    }
     const Value& at(const std::string& key) const
     {
-        auto& o = obj();
-        auto it = o.find(key);
-        if (it == o.end())
-            throw std::runtime_error("backup: missing field '" + key + "'");
-        return it->second;
+        if (const Value* v = find(key))
+            return *v;
+        throw std::runtime_error("backup: missing field '" + key + "'");
     }
-    bool has(const std::string& key) const { return obj().count(key) != 0; }
+    bool has(const std::string& key) const { return find(key) != nullptr; }
 
 private:
     template <class T>

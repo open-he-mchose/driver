@@ -30,6 +30,8 @@ if(NOT MCHOSE_HIDAPI_TARGET AND MCHOSE_FETCH_HIDAPI)
   set(HIDAPI_WITH_LIBUSB OFF CACHE BOOL "" FORCE)
   set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "" FORCE)
   set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+  # hidapi 0.14.0 declares cmake_minimum_required(VERSION 3.1.3...), which CMake 4 rejects.
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
   FetchContent_Declare(hidapi
     GIT_REPOSITORY https://github.com/libusb/hidapi.git
     GIT_TAG hidapi-0.14.0)
