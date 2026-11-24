@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,15 @@ struct DeviceInfo {
 // usage page 0x0001 / usage 0x0000 (interface 1 on the Jet75-II).
 std::vector<DeviceInfo> enumerate();
 
+// Another program of this project (mchose-gui, mchosectl) already uses the keyboard.
+class DeviceBusy : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+// Opens the configuration interface. Only one program of this project may use a keyboard at a time (two
+// programs sending live colours make it flicker, and they take each other's replies); the constructor throws
+// DeviceBusy if another one holds it. The lock is released when the object is destroyed or the program exits.
 class HidapiTransport : public Transport {
 public:
     explicit HidapiTransport(const std::string& path);

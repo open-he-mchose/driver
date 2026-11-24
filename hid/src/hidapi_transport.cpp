@@ -6,7 +6,21 @@
 #include <algorithm>
 #include <cerrno>
 #include <cwchar>
+#include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
+
+#if defined(_WIN32)
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#else
+#  include <fcntl.h>
+#  include <sys/file.h>
+#  include <unistd.h>
+#endif
 #include <utility>
 
 namespace mchose::hid {
@@ -40,6 +54,21 @@ std::string narrow(const wchar_t* w)
 std::string error_text(hid_device* dev)
 {
     return narrow(hid_error(dev));
+}
+
+// Lock key: VID/PID of the device at `path` (one lock per keyboard model is enough in practice).
+std::string lock_key(const std::string& path)
+{
+    std::string key = "keyboard";
+    hid_device_info* list = hid_enumerate(kMchoseVid, 0);
+    for (auto* d = list; d; d = d->next)
+        if (d->path && path == d->path) {
+            char buf[16];
+            std::snprintf(buf, sizeof buf, "%04x-%04x", d->vendor_id, d->product_id);
+            key = buf;
+        }
+    hid_free_enumeration(list);
+    return key;
 }
 
 }  // namespace
@@ -77,13 +106,86 @@ std::vector<DeviceInfo> enumerate()
     return out;
 }
 
+namespace {
+
+// Process-wide lock per keyboard model, shared by all programs of this project.
+class DeviceLock {
+public:
+    explicit DeviceLock(const std::string& key)
+    {
+#if defined(_WIN32)
+        const std::wstring name = L"Local\\open-he-mchose-" + std::wstring(key.begin(), key.end());
+        mutex_ = CreateMutexW(nullptr, TRUE, name.c_str());
+        if (mutex_ && GetLastError() == ERROR_ALREADY_EXISTS) {
+            CloseHandle(mutex_);
+            mutex_ = nullptr;
+            throw DeviceBusy("the keyboard is in use by another program (mchose-gui or mchosectl); close it first");
+        }
+#else
+        const char* dir = std::getenv("XDG_RUNTIME_DIR");
+        path_ = std::string(dir && *dir ? dir : "/tmp") + "/open-he-mchose-" + key + ".lock";
+        fd_ = open(path_.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+        if (fd_ < 0)
+            return;   // no lock possible (read-only dir): continue without
+        if (flock(fd_, LOCK_EX | LOCK_NB) != 0) {
+            char buf[128] = {};
+            const ssize_t n = pread(fd_, buf, sizeof buf - 1, 0);
+            close(fd_);
+            fd_ = -1;
+            std::string who = n > 0 ? std::string(buf, static_cast<std::size_t>(n)) : std::string("another program");
+            while (!who.empty() && (who.back() == '\n' || who.back() == ' '))
+                who.pop_back();
+            throw DeviceBusy("the keyboard is in use by " + who + "; close it first");
+        }
+        char info[96];
+        std::snprintf(info, sizeof info, "%s (pid %d)\n", program_name().c_str(), static_cast<int>(getpid()));
+        if (ftruncate(fd_, 0) == 0)
+            (void)pwrite(fd_, info, std::char_traits<char>::length(info), 0);
+#endif
+    }
+    ~DeviceLock()
+    {
+#if defined(_WIN32)
+        if (mutex_) {
+            ReleaseMutex(mutex_);
+            CloseHandle(mutex_);
+        }
+#else
+        if (fd_ >= 0)
+            close(fd_);   // releases the flock
+#endif
+    }
+    DeviceLock(const DeviceLock&) = delete;
+    DeviceLock& operator=(const DeviceLock&) = delete;
+
+private:
+#if defined(_WIN32)
+    HANDLE mutex_ = nullptr;
+#else
+    static std::string program_name()
+    {
+        char buf[256] = {};
+        const ssize_t n = readlink("/proc/self/exe", buf, sizeof buf - 1);
+        std::string p = n > 0 ? std::string(buf, static_cast<std::size_t>(n)) : std::string("mchose program");
+        const auto slash = p.rfind('/');
+        return slash == std::string::npos ? p : p.substr(slash + 1);
+    }
+    std::string path_;
+    int fd_ = -1;
+#endif
+};
+
+}  // namespace
+
 struct HidapiTransport::Impl {
+    std::unique_ptr<DeviceLock> lock;
     hid_device* dev = nullptr;
 };
 
 HidapiTransport::HidapiTransport(const std::string& path) : impl_(std::make_unique<Impl>())
 {
     ensure_init();
+    impl_->lock = std::make_unique<DeviceLock>(lock_key(path));
     impl_->dev = hid_open_path(path.c_str());
     if (!impl_->dev)
         throw std::runtime_error("cannot open " + path +
