@@ -748,38 +748,8 @@ std::string describe_adv(Tool& t, const AdvBinding& b, const AdvTables& tables, 
 {
     char head[96];
     std::snprintf(head, sizeof head, "layer %d  %-12s %-6s slot %2d  ", b.layer, t.key_label(b.key).c_str(), to_string(b.kind), b.slot);
-    std::string s = head;
-    if (b.slot >= kAdvSlots)
-        return s + "(slot out of range!)";
-    auto code_at = [](const std::vector<std::uint8_t>& v, std::size_t off) { return KeyCode{v[off], v[off + 1], v[off + 2]}; };
-    const auto slot = static_cast<std::size_t>(b.slot);
-    switch (b.kind) {
-    case AdvKind::ModTap:
-        return s + "tap " + to_string(code_at(tables.mt, 6 * slot)) + ", hold " + to_string(code_at(tables.mt, 6 * slot + 3)) +
-               " after " + std::to_string(b.code2 * 10) + " ms";
-    case AdvKind::RapidStrike:
-    case AdvKind::Socd:
-    case AdvKind::Lt: {
-        s += "sends " + to_string(code_at(tables.mt, 6 * slot)) + ", partner " +
-             (b.code2 < t.kb().model().keys ? t.key_label(b.code2) : std::string("?")) + " (#" + std::to_string(b.code2) + ")";
-        if (b.kind == AdvKind::Socd)
-            s += ", " + std::string(to_string(static_cast<SocdMode>(trig[static_cast<std::size_t>(b.key)].priority() & 3)));
-        return s;
-    }
-    case AdvKind::Toggle:
-        return s + "toggles " + to_string(code_at(tables.tgl, 3 * slot));
-    case AdvKind::Dks: {
-        auto d = DksEntry::decode(std::span<const std::uint8_t>(tables.dks).subspan(24 * slot, 24));
-        char pts[48];
-        std::snprintf(pts, sizeof pts, "points %.1f / %.1f mm:", d.shallow / 10.0, d.deep / 10.0);
-        s += pts;
-        for (const auto& a : d.actions)
-            s += " " + to_string(a.code) + " " + std::to_string(a.spans.down_start) + "," + std::to_string(a.spans.down_end) +
-                 "," + std::to_string(a.spans.up_start) + "," + std::to_string(a.spans.up_end) + ";";
-        return s;
-    }
-    }
-    return s;
+    auto name = [&t](int k) { return k < t.kb().model().keys ? t.key_label(k) : std::string("?"); };
+    return head + glw::describe_adv(b, tables, trig[static_cast<std::size_t>(b.key)].priority(), name);
 }
 
 KeyCode parse_target(const std::string& s)

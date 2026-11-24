@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QStandardPaths>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -190,6 +191,34 @@ void Worker::refresh()
                 QString& b = s.macroBindings[c.code1];
                 b += (b.isEmpty() ? "" : ", ") + QString::fromLatin1(layerNames[l]) + label + " (" + mode + ")";
             }
+        // Advanced keys of this profile, with the problems doctor finds.
+        {
+            auto bindings = kb_->adv_bindings(s.activeProfile);
+            auto tables = kb_->adv_tables(s.activeProfile);
+            std::vector<std::uint8_t> prio;
+            for (const auto& e : trig)
+                prio.push_back(e.priority());
+            auto problems = adv_problems(bindings, tables, prio);
+            auto name = [&](int k) {
+                return k >= 0 && k < m.keys ? to_string(factory_[0][static_cast<std::size_t>(k)]) : std::string("?");
+            };
+            static const char* layerNames[4] = {"Base", "Fn", "Mac", "Mac Fn"};
+            for (const auto& b : bindings) {
+                Snapshot::Adv a;
+                a.layer = b.layer;
+                a.key = b.key;
+                a.label = QString::fromLatin1(layerNames[b.layer & 3]) + " · " + QString::fromStdString(name(b.key));
+                a.kind = QString::fromLatin1(to_string(b.kind));
+                a.summary = QString::fromStdString(describe_adv(b, tables, prio[static_cast<std::size_t>(b.key)], name));
+                const std::string where = "layer " + std::to_string(b.layer) + " key " + std::to_string(b.key) + " ";
+                for (const auto& p : problems)
+                    if (p.rfind(where, 0) == 0)
+                        a.problem += (a.problem.isEmpty() ? "" : "; ") + QString::fromStdString(p.substr(where.size()));
+                s.adv.push_back(a);
+            }
+            for (const auto& o : adv_orphans(bindings, tables))
+                s.advOrphans << QString::fromStdString(o);
+        }
         emit refreshed(s);
     } catch (const std::exception& e) {
         emit message(QString::fromStdString(e.what()), true);
@@ -307,6 +336,85 @@ void Worker::bindMacro(QVector<int> keys, int layer, int index, int mode)
             throw std::runtime_error("bad macro binding");
         const KeyCode c{KeyCode::Macro, static_cast<std::uint8_t>(index), static_cast<std::uint8_t>(mode)};
         setKeys(keys, layer, [&](int) { return c; });
+    });
+}
+
+namespace {
+
+KeyCode need_code(const QString& text)
+{
+    auto c = parse_keycode(text.toStdString());
+    if (!c)
+        throw std::runtime_error("unknown key code '" + text.toStdString() + "'");
+    return *c;
+}
+
+}  // namespace
+
+void Worker::advPair(QVector<int> keys, int layer, int kind, int socdMode)
+{
+    run(tr("Pair created"), [&] {
+        if (keys.size() != 2)
+            throw std::runtime_error("select exactly two keys for a pair");
+        static const AdvKind kinds[3] = {AdvKind::Socd, AdvKind::RapidStrike, AdvKind::Lt};
+        autoBackup();
+        kb_->bind_pair(kb_->active_profile(), layer, kinds[std::clamp(kind, 0, 2)], keys[0], keys[1],
+                       static_cast<SocdMode>(std::clamp(socdMode, 0, 3)));
+    });
+}
+
+void Worker::advModTap(QVector<int> keys, int layer, QString tap, QString hold, int holdMs)
+{
+    run(tr("Mod-Tap created"), [&] {
+        if (keys.size() != 1)
+            throw std::runtime_error("select exactly one key");
+        const KeyCode t = need_code(tap), h = need_code(hold);
+        autoBackup();
+        kb_->bind_mod_tap(kb_->active_profile(), layer, keys[0], t, h, holdMs);
+    });
+}
+
+void Worker::advToggle(QVector<int> keys, int layer, QString code)
+{
+    run(tr("Toggle created"), [&] {
+        if (keys.size() != 1)
+            throw std::runtime_error("select exactly one key");
+        std::optional<KeyCode> c;
+        if (!code.trimmed().isEmpty())
+            c = need_code(code);
+        autoBackup();
+        kb_->bind_toggle(kb_->active_profile(), layer, keys[0], c);
+    });
+}
+
+void Worker::advDks(QVector<int> keys, int layer, int shallow, int deep, QVariantList actions)
+{
+    run(tr("DKS created"), [&] {
+        if (keys.size() != 1)
+            throw std::runtime_error("select exactly one key");
+        DksEntry d;
+        d.shallow = shallow;
+        d.deep = deep;
+        for (const QVariant& v : actions) {
+            const QVariantMap a = v.toMap();
+            if (a.value("key").toString().trimmed().isEmpty())
+                continue;
+            d.actions.push_back({need_code(a.value("key").toString()),
+                                 {a.value("ds").toInt(), a.value("de").toInt(), a.value("us").toInt(), a.value("ue").toInt()}});
+        }
+        if (d.actions.empty())
+            throw std::runtime_error("DKS needs at least one action");
+        d.encode();   // validates points and the number of actions before anything is written
+        autoBackup();
+        kb_->bind_dks(kb_->active_profile(), layer, keys[0], d);
+    });
+}
+
+void Worker::advClear(int layer, int key)
+{
+    run(tr("Advanced function removed"), [&] {
+        autoBackup();
+        kb_->clear_adv(kb_->active_profile(), layer, key);
     });
 }
 

@@ -2,6 +2,7 @@
 #include "mchose/glw/advanced.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstddef>
 #include <map>
 #include <set>
@@ -174,6 +175,48 @@ DksEntry DksEntry::decode(std::span<const std::uint8_t> e)
             d.actions.push_back({code, dks_unmask(m)});
     }
     return d;
+}
+
+// --- description ----------------------------------------------------------------------------------
+
+std::string describe_adv(const AdvBinding& b, const AdvTables& tables, std::uint8_t priority,
+                         const std::function<std::string(int)>& key_name)
+{
+    if (b.slot >= kAdvSlots)
+        return "(slot out of range!)";
+    const auto slot = static_cast<std::size_t>(b.slot);
+    auto code_at = [](const std::vector<std::uint8_t>& v, std::size_t off) {
+        return off + 2 < v.size() ? KeyCode{v[off], v[off + 1], v[off + 2]} : KeyCode{};
+    };
+    switch (b.kind) {
+    case AdvKind::ModTap:
+        return "tap " + to_string(code_at(tables.mt, 6 * slot)) + ", hold " + to_string(code_at(tables.mt, 6 * slot + 3)) +
+               " after " + std::to_string(b.code2 * 10) + " ms";
+    case AdvKind::RapidStrike:
+    case AdvKind::Socd:
+    case AdvKind::Lt: {
+        std::string s = "sends " + to_string(code_at(tables.mt, 6 * slot)) + ", partner " + key_name(b.code2) + " (#" +
+                        std::to_string(b.code2) + ")";
+        if (b.kind == AdvKind::Socd)
+            s += ", " + std::string(to_string(static_cast<SocdMode>(priority & 3)));
+        return s;
+    }
+    case AdvKind::Toggle:
+        return "toggles " + to_string(code_at(tables.tgl, 3 * slot));
+    case AdvKind::Dks: {
+        if (tables.dks.size() < 24 * (slot + 1))
+            return "?";
+        auto d = DksEntry::decode(std::span<const std::uint8_t>(tables.dks).subspan(24 * slot, 24));
+        char pts[48];
+        std::snprintf(pts, sizeof pts, "points %.1f / %.1f mm:", d.shallow / 10.0, d.deep / 10.0);
+        std::string s = pts;
+        for (const auto& a : d.actions)
+            s += " " + to_string(a.code) + " " + std::to_string(a.spans.down_start) + "," + std::to_string(a.spans.down_end) +
+                 "," + std::to_string(a.spans.up_start) + "," + std::to_string(a.spans.up_end) + ";";
+        return s;
+    }
+    }
+    return {};
 }
 
 // --- checks ----------------------------------------------------------------------------------------

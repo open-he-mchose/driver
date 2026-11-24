@@ -27,6 +27,7 @@ qt_add_qml_module(mchose-gui
     qml/TriggerPanel.qml
     qml/KeymapPanel.qml
     qml/MacroPanel.qml
+    qml/AdvancedPanel.qml
     qml/LightingPanel.qml
     qml/DevicePanel.qml
 )

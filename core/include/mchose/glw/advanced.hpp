@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -75,6 +76,11 @@ struct AdvTables {
     std::vector<std::uint8_t> tgl;   // 32 x 3
     std::vector<std::uint8_t> dks;   // 32 x 24
 };
+// What a binding does, e.g. "tap Esc, hold LCtrl after 200 ms" or "sends A, partner D (#11), last-input".
+// `priority` = the key's trigger priority nibble (SOCD mode); key_name(index) names partner keys.
+std::string describe_adv(const AdvBinding& b, const AdvTables& tables, std::uint8_t priority,
+                         const std::function<std::string(int)>& key_name);
+
 std::vector<std::string> adv_problems(const std::vector<AdvBinding>& bindings, const AdvTables& tables,
                                       std::span<const std::uint8_t> priority);
 // Table entries that are filled but not referenced by any binding (harmless leftovers).

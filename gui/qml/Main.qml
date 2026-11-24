@@ -82,8 +82,8 @@ ApplicationWindow {
             id: kbd
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(width / backend.keys.widthUnits * backend.keys.heightUnits + 8, win.height * 0.55)
-            overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 2 ? "mapping"
-                   : tabs.currentIndex === 3 ? "color" : "depth"
+            overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
+                   : tabs.currentIndex === 4 ? "color" : "depth"
             enabled: backend.connected
             opacity: backend.connected ? 1 : 0.4
         }
@@ -93,20 +93,25 @@ ApplicationWindow {
             spacing: 8
             TabBar {
                 id: tabs
-                Layout.preferredWidth: 620
+                Layout.preferredWidth: 640
+                Layout.minimumWidth: 400
                 currentIndex: win.startTab
                 TabButton { text: qsTr("Actuation") }
                 TabButton { text: qsTr("Keymap") }
                 TabButton { text: qsTr("Macros") }
+                TabButton { text: qsTr("Advanced") }
                 TabButton { text: qsTr("Lighting") }
                 TabButton { text: qsTr("Device") }
             }
-            Item { Layout.fillWidth: true }
             Label {
                 text: backend.keys.selectedCount
                       ? qsTr("%n key(s) selected", "", backend.keys.selectedCount)
                       : qsTr("Click, Shift+click or drag to select keys")
                 opacity: 0.8
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignRight
+                Layout.fillWidth: true
+                Layout.preferredWidth: 100
             }
             Button { text: qsTr("All"); flat: true; onClicked: backend.keys.selectAll() }
             Button { text: qsTr("None"); flat: true; onClicked: backend.keys.clearSelection() }
@@ -119,6 +124,7 @@ ApplicationWindow {
             TriggerPanel {}
             KeymapPanel {}
             MacroPanel {}
+            AdvancedPanel {}
             LightingPanel {}
             DevicePanel {}
         }

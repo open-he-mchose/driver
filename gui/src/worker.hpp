@@ -41,6 +41,12 @@ struct Snapshot {
     QStringList macroTexts;      // 16 macros in the exact text form (empty = no macro)
     QVector<int> macroSteps;     // number of steps
     QStringList macroBindings;   // keys bound to each macro in the active profile, e.g. "F10 (once)"
+    struct Adv {
+        int layer = 0, key = 0;
+        QString label, kind, summary, problem;   // problem: empty if the binding is fine
+    };
+    QVector<Adv> adv;            // advanced bindings of the active profile
+    QStringList advOrphans;      // filled table entries nobody uses (harmless)
 };
 Q_DECLARE_METATYPE(Snapshot)
 
@@ -60,6 +66,11 @@ public slots:
     void resetToFactory(QVector<int> keys, int layer);              // factory code of each key in that layer
     void setMacro(int index, QString text);                         // exact text form (format_macro)
     void bindMacro(QVector<int> keys, int layer, int index, int mode);   // mode: 0 hold, 1-254 times, 255 toggle
+    void advPair(QVector<int> keys, int layer, int kind, int socdMode);   // kind: 0 SOCD, 1 RS, 2 LT
+    void advModTap(QVector<int> keys, int layer, QString tap, QString hold, int holdMs);
+    void advToggle(QVector<int> keys, int layer, QString code);            // empty code: the key's own function
+    void advDks(QVector<int> keys, int layer, int shallow, int deep, QVariantList actions);   // [{key, ds, de, us, ue}]
+    void advClear(int layer, int key);
     void applyLight(int effect, int brightness, int speed, QString color);
     void backup(QString path);
     void restore(QString path);

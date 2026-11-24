@@ -30,6 +30,8 @@ class Backend : public QObject {
     Q_PROPERTY(KeyModel* keys READ keys CONSTANT)
     Q_PROPERTY(MacroModel* macroEditor READ macroEditor CONSTANT)
     Q_PROPERTY(QVariantList macros READ macros NOTIFY snapshotChanged)   // [{steps, bound, text}] for M1..M16
+    Q_PROPERTY(QVariantList advanced READ advanced NOTIFY snapshotChanged)   // [{layer, key, label, kind, summary, problem}]
+    Q_PROPERTY(QStringList advancedOrphans READ advancedOrphans NOTIFY snapshotChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
 public:
     explicit Backend(QObject* parent = nullptr);
@@ -51,6 +53,8 @@ public:
     KeyModel* keys() { return &keys_; }
     MacroModel* macroEditor() { return &macroEditor_; }
     QVariantList macros() const;
+    QVariantList advanced() const;
+    QStringList advancedOrphans() const { return snap_.advOrphans; }
     QString version() const { return QStringLiteral(MCHOSE_VERSION); }
 
     Q_INVOKABLE void connectDevice();
@@ -68,6 +72,14 @@ public:
     Q_INVOKABLE void saveMacro(int index);               // write the editor's steps
     Q_INVOKABLE void clearMacro(int index);
     Q_INVOKABLE void bindMacro(int index, int mode);     // to the selected keys in the current layer
+    // Advanced keys on the selected keys in the current layer.
+    Q_INVOKABLE void createPair(int kind, int socdMode);   // kind: 0 SOCD, 1 RS, 2 LT
+    Q_INVOKABLE void createModTap(const QString& tap, const QString& hold, int holdMs);
+    Q_INVOKABLE void createToggle(const QString& code);
+    Q_INVOKABLE void createDks(double shallowMm, double deepMm, const QVariantList& actions);
+    Q_INVOKABLE void removeAdvanced(int layer, int key);
+    // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
+    Q_INVOKABLE QVariantList storedSpans(int ds, int de, int us, int ue) const;
 
 signals:
     void connectedChanged();
@@ -90,6 +102,11 @@ signals:
     void doStreaming(bool on);
     void doSetMacro(int index, QString text);
     void doBindMacro(QVector<int> keys, int layer, int index, int mode);
+    void doAdvPair(QVector<int> keys, int layer, int kind, int socdMode);
+    void doAdvModTap(QVector<int> keys, int layer, QString tap, QString hold, int holdMs);
+    void doAdvToggle(QVector<int> keys, int layer, QString code);
+    void doAdvDks(QVector<int> keys, int layer, int shallow, int deep, QVariantList actions);
+    void doAdvClear(int layer, int key);
 
 private:
     QThread thread_;

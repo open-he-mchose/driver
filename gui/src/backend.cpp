@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
 
+#include "mchose/glw/advanced.hpp"
 #include "mchose/model.hpp"
 
 Backend::Backend(QObject* parent) : QObject(parent)
@@ -27,6 +28,11 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(this, &Backend::doStreaming, worker_, &Worker::setStreaming);
     connect(this, &Backend::doSetMacro, worker_, &Worker::setMacro);
     connect(this, &Backend::doBindMacro, worker_, &Worker::bindMacro);
+    connect(this, &Backend::doAdvPair, worker_, &Worker::advPair);
+    connect(this, &Backend::doAdvModTap, worker_, &Worker::advModTap);
+    connect(this, &Backend::doAdvToggle, worker_, &Worker::advToggle);
+    connect(this, &Backend::doAdvDks, worker_, &Worker::advDks);
+    connect(this, &Backend::doAdvClear, worker_, &Worker::advClear);
     connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
 
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
@@ -173,4 +179,63 @@ void Backend::bindMacro(int index, int mode)
         return;
     }
     emit doBindMacro(sel, keys_.layer(), index, mode);
+}
+
+QVariantList Backend::advanced() const
+{
+    QVariantList l;
+    for (const auto& a : snap_.adv)
+        l.push_back(QVariantMap{{"layer", a.layer}, {"key", a.key}, {"label", a.label}, {"kind", a.kind},
+                                {"summary", a.summary}, {"problem", a.problem}});
+    return l;
+}
+
+namespace {
+
+bool need_selection(Backend* b, const QVector<int>& sel, int count)
+{
+    if (sel.size() == count)
+        return true;
+    emit b->message(count == 2 ? Backend::tr("Select exactly two keys on the keyboard for a pair")
+                               : Backend::tr("Select exactly one key on the keyboard"), true);
+    return false;
+}
+
+}  // namespace
+
+void Backend::createPair(int kind, int socdMode)
+{
+    const auto sel = keys_.selectedIndices();
+    if (need_selection(this, sel, 2))
+        emit doAdvPair(sel, keys_.layer(), kind, socdMode);
+}
+
+void Backend::createModTap(const QString& tap, const QString& hold, int holdMs)
+{
+    const auto sel = keys_.selectedIndices();
+    if (need_selection(this, sel, 1))
+        emit doAdvModTap(sel, keys_.layer(), tap, hold, holdMs);
+}
+
+void Backend::createToggle(const QString& code)
+{
+    const auto sel = keys_.selectedIndices();
+    if (need_selection(this, sel, 1))
+        emit doAdvToggle(sel, keys_.layer(), code);
+}
+
+void Backend::createDks(double shallowMm, double deepMm, const QVariantList& actions)
+{
+    const auto sel = keys_.selectedIndices();
+    if (need_selection(this, sel, 1))
+        emit doAdvDks(sel, keys_.layer(), qRound(shallowMm * 10), qRound(deepMm * 10), actions);
+}
+
+void Backend::removeAdvanced(int layer, int key) { emit doAdvClear(layer, key); }
+
+QVariantList Backend::storedSpans(int ds, int de, int us, int ue) const
+{
+    using namespace mchose::glw;
+    const DksSpans s = dks_unmask(dks_mask({ds, de, us, ue}));
+    return {s.down_start, s.down_end, s.up_start, s.up_end};
 }
