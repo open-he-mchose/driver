@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-11-25)
 
 - GUI: **one program per user**. Starting `mchose-gui` again shows the running program's window instead of a
   second copy; closing the window keeps it running in the background (tray icon on Windows and on Linux desktops
