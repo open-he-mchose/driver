@@ -48,6 +48,7 @@ class Backend : public QObject {
     Q_PROPERTY(bool gamepadRunning READ gamepadRunning NOTIFY gamepadChanged)
     Q_PROPERTY(QString gamepadStatus READ gamepadStatus NOTIFY gamepadChanged)
     Q_PROPERTY(QVariantMap gamepadLive READ gamepadLive NOTIFY gamepadLiveChanged)
+    Q_PROPERTY(bool calibrating READ calibrating NOTIFY calibratingChanged)
     // Application settings (QSettings).
     Q_PROPERTY(bool keepInBackground READ keepInBackground WRITE setKeepInBackground NOTIFY appSettingsChanged)
     Q_PROPERTY(bool startAtLogin READ startAtLogin WRITE setStartAtLogin NOTIFY appSettingsChanged)
@@ -88,6 +89,7 @@ public:
     bool gamepadRunning() const { return gamepadRunning_; }
     QString gamepadStatus() const { return gamepadStatus_; }
     QVariantMap gamepadLive() const { return gamepadLive_; }
+    bool calibrating() const { return calibrating_; }
     bool keepInBackground() const;
     void setKeepInBackground(bool on);
     bool startAtLogin() const;
@@ -147,6 +149,10 @@ public:
     Q_INVOKABLE void startGamepad(const QString& text);
     Q_INVOKABLE void stopGamepad();
     Q_INVOKABLE void gamepadKeysTyping(const QString& text, bool typing);   // false: disable the mapped keys in the base layer
+    // Switch calibration: the key states are in keys (calib role, calibDone / calibProgress / calibNeeded).
+    Q_INVOKABLE void startCalibration();
+    Q_INVOKABLE void finishCalibration();
+    Q_INVOKABLE void resetCalibration();   // all keys back to the default bottom value (0xB1)
     // Spans as the keyboard stores them (the format normalises some combinations, like the official driver).
     Q_INVOKABLE QVariantList storedSpans(int ds, int de, int us, int ue) const;
 
@@ -162,6 +168,7 @@ signals:
     void gamepadChanged();
     void gamepadLiveChanged();
     void appSettingsChanged();
+    void calibratingChanged();
 
     // to the worker thread
     void doConnect();
@@ -193,6 +200,9 @@ signals:
     void doScriptParam(QString name, double value);
     void doGamepadStart(QString config);
     void doGamepadStop();
+    void doCalibStart();
+    void doCalibEnd();
+    void doCalibReset();
 
 private:
     QThread thread_;
@@ -205,6 +215,7 @@ private:
     bool streaming_ = false;
     bool scriptRunning_ = false;
     bool gamepadRunning_ = false;
+    bool calibrating_ = false;
     QString gamepadStatus_;
     QVariantMap gamepadLive_;
     std::optional<int> keyByName(QStringView name) const;   // factory name or #N -> matrix index

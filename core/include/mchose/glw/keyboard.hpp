@@ -31,7 +31,9 @@ struct DepthSample {
     int normalized = 0;         // 0..1600, input of the travel curve
     int travel = 0;             // 0.01 mm, as computed by the firmware (lags on fast releases)
     bool pressed = false;
-    bool calibrated = false;
+    bool calibrated = false;    // calibration status FF
+    int calibration = 0xFF;     // raw status: FF calibrated, 00 / 01 in progress (two deep presses)
+    int bottom = 0;             // stored bottom calibration value, to 40 ADC counts (firmware evidence only)
     int max_travel = 0;         // 0.01 mm
     int adc = 0;
     int adc_rest = 0;
@@ -114,6 +116,19 @@ public:
     // Depth stream on/off: sets the FuncConfig debug bit of the active profile (two flash writes).
     void set_depth_stream(bool on);
 
+    // --- calibration (https://open-he-mchose.github.io/protocols/glw/calibration/) ----------------
+    // start: 0xA8. Also turns the depth stream on (RAM bit) and sends two full sweeps, so every key's status
+    // arrives. While the session runs, every key that is pressed gets its bottom value reset and stores a new one
+    // after two stable deep presses (status 00 -> 01 -> FF); a partial but steady press can be stored as the
+    // bottom, so ask for full presses.
+    void start_calibration();
+    // end: 0xA9, then the FuncConfig debug bit is written as `keep_stream` (0xA9 leaves the stream on; the bit
+    // is written even if FuncConfig already shows it cleared, two flash writes).
+    void end_calibration(bool keep_stream);
+    // 0xB1: resets the calibration of every key to the default bottom value and saves it (the same as holding
+    // Fn+Backspace for 3 s). Afterwards every key should be calibrated again.
+    void reset_calibration();
+
     // --- advanced keys (https://open-he-mchose.github.io/protocols/glw/advanced-keys/) ---------------
     std::vector<AdvBinding> adv_bindings(int profile);
     AdvTables adv_tables(int profile);
@@ -153,6 +168,7 @@ private:
     void count_write(std::size_t n = 1);
     void check_profile(int profile) const;
     void check_key(int key) const;
+    void write_funcconfig(int profile, const FuncConfig& fc);   // unconditional, verified
     int sync_region(const char* what, int profile, std::uint8_t rd, std::uint8_t wr, int offset,
                     const std::vector<std::uint8_t>& want, std::size_t entry, const Log& log);
     void check_free(const std::vector<AdvBinding>& bindings, int layer, int key);

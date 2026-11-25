@@ -34,6 +34,7 @@ qt_add_qml_module(mchose-gui
     qml/LightingPanel.qml
     qml/DevicePanel.qml
     qml/Tray.qml
+    qml/CalibrationPanel.qml
 )
 
 file(GLOB MCHOSE_GUI_EXAMPLES_ABS ${PROJECT_SOURCE_DIR}/script/examples/*.lua)

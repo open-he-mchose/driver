@@ -30,6 +30,8 @@ ApplicationWindow {
     }
     onClosing: {
         saveSize()
+        if (backend.calibrating)
+            backend.finishCalibration()   // key presses elsewhere must not go into a running session
         if (!backend.keepInBackground) {
             Qt.quit()
         } else if (tray.item && tray.item.available && !backend.uiValue("trayHintShown", false)) {
@@ -42,7 +44,7 @@ ApplicationWindow {
         target: Qt.application
         function onAboutToQuit() { if (win.visible) win.saveSize() }
     }
-    Shortcut { sequences: [StandardKey.Quit]; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
+    Shortcut { sequences: [StandardKey.Quit]; context: Qt.ApplicationShortcut; enabled: !backend.calibrating; onActivated: Qt.quit() }
     Loader {
         id: tray
         active: trayAvailable
@@ -72,7 +74,7 @@ ApplicationWindow {
                 delegate: Button {
                     required property int index
                     text: index + (backend.rotation.indexOf(index) >= 0 ? "" : "*")
-                    enabled: !backend.busy
+                    enabled: !backend.busy && !backend.calibrating
                     flat: true
                     implicitWidth: 44
                     font.bold: backend.activeProfile === index
@@ -96,7 +98,7 @@ ApplicationWindow {
             BusyIndicator { running: backend.busy; implicitWidth: 32; implicitHeight: 32 }
             Button {
                 text: backend.connected ? qsTr("Reload") : qsTr("Connect")
-                enabled: !backend.busy
+                enabled: !backend.busy && !backend.calibrating
                 onClicked: backend.connected ? backend.refresh() : backend.connectDevice()
             }
         }
@@ -118,7 +120,7 @@ ApplicationWindow {
             Layout.preferredHeight: implicitHeight
             Layout.minimumHeight: implicitHeight
             Layout.maximumHeight: implicitHeight
-            overlay: tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
+            overlay: backend.calibrating ? "calibration" : tabs.currentIndex === 0 ? "actuation" : tabs.currentIndex <= 3 ? "mapping"
                    : tabs.currentIndex === 4 ? "color" : tabs.currentIndex === 5 ? "none"
                    : tabs.currentIndex === 6 ? "gamepad" : "depth"
             enabled: backend.connected
@@ -133,6 +135,7 @@ ApplicationWindow {
                 Layout.preferredWidth: 720
                 Layout.minimumWidth: 400
                 currentIndex: win.startTab
+                enabled: !backend.calibrating
                 TabButton { text: qsTr("Actuation") }
                 TabButton { text: qsTr("Keymap") }
                 TabButton { text: qsTr("Macros") }
@@ -156,7 +159,13 @@ ApplicationWindow {
             Button { text: qsTr("None"); flat: true; onClicked: backend.keys.clearSelection() }
         }
 
+        CalibrationPanel {
+            visible: backend.calibrating
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
         StackLayout {
+            visible: !backend.calibrating
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: tabs.currentIndex

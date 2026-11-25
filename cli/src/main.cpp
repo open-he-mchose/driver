@@ -20,6 +20,15 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
+
 #include "mchose/glw/backup_file.hpp"
 #include "mchose/glw/keyboard.hpp"
 #include "mchose/glw/macro_text.hpp"
@@ -86,6 +95,13 @@ live
   depth [--off]                      stream key depth until Ctrl+C (sets the FuncConfig debug bit;
                                      --off clears a bit left set)
 
+calibration (switches; not part of backups)
+  calibrate [KEY...] [--idle S]      press each key to recalibrate fully down twice, holding it a moment;
+                                     ends by itself once the pressed (or listed) keys are done and the
+                                     keyboard was idle for S seconds (default 8). Ctrl+C ends early
+  calibrate --reset --yes            reset the calibration of all keys (like holding Fn+Backspace 3 s);
+                                     afterwards calibrate every key
+
 options
   --profile P                        profile 0-3 (default: the active one)
   --no-backup                        do not save a backup before writing
@@ -121,7 +137,7 @@ struct Args {
 Args parse_args(int argc, char** argv)
 {
     static const char* flags[] = {"--factory", "--off", "--version", "--no-backup", "--allow-reboot", "--allow-dangerous",
-                                  "--allow-outside-rotation", "--help", "-h", "--presets", "--show"};
+                                  "--allow-outside-rotation", "--help", "-h", "--presets", "--show", "--reset", "--yes"};
     Args a;
     for (int i = 1; i < argc; ++i) {
         std::string s = argv[i];
@@ -1004,6 +1020,144 @@ int cmd_depth(Tool& t)
     return 0;
 }
 
+// Ends the calibration session on every way out of cmd_calibrate (Ctrl+C, errors).
+struct CalibrationGuard {
+    Keyboard& kb;
+    bool keep_stream;
+    ~CalibrationGuard()
+    {
+        try {
+            kb.end_calibration(keep_stream);
+            std::cerr << "calibration session ended\n";
+        } catch (const std::exception& e) {
+            std::cerr << "could not end the calibration session: " << e.what()
+                      << " (unplug and replug the keyboard to end it)\n";
+        }
+    }
+};
+
+// The keys pressed during calibration are typed into the terminal too; drop them.
+void discard_typed_input()
+{
+#ifdef _WIN32
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+#else
+    if (isatty(STDIN_FILENO))
+        tcflush(STDIN_FILENO, TCIFLUSH);
+#endif
+}
+
+int cmd_calibrate(Tool& t)
+{
+    auto& kb = t.kb();
+    if (t.args_.flag("--reset")) {
+        if (!t.args_.flag("--yes"))
+            throw std::runtime_error("calibrate --reset sets the calibration of every key back to the default; "
+                                     "add --yes to do it, then run 'mchosectl calibrate' and press every key");
+        t.before_write();
+        kb.reset_calibration();
+        std::cout << "calibration of all keys reset; now run 'mchosectl calibrate' and press every key fully down twice\n";
+        return 0;
+    }
+    const int nkeys = kb.model().keys;
+    std::vector<bool> wanted(static_cast<std::size_t>(nkeys), false);
+    bool listed = false;
+    for (std::size_t i = 1; i < t.args_.pos.size(); ++i) {
+        wanted[static_cast<std::size_t>(t.key_index(t.args_.pos[i]))] = true;
+        listed = true;
+    }
+    const double idle_s = t.args_.opt.count("--idle") ? std::stod(t.args_.get("--idle")) : 8.0;
+    const auto factory = kb.factory_keymap(0);
+    std::map<std::array<std::uint8_t, 3>, int> index_of;
+    for (int i = 0; i < nkeys; ++i)
+        index_of[factory[static_cast<std::size_t>(i)].bytes()] = i;
+    auto name = [&](int i) { return to_string(factory[static_cast<std::size_t>(i)]); };
+
+    const bool keep_stream = kb.funcconfig(kb.active_profile()).debug_mode();
+    t.before_write();
+    std::signal(SIGINT, on_signal);
+#ifdef SIGTERM
+    std::signal(SIGTERM, on_signal);
+#endif
+    std::cerr << "Calibration: press each key " << (listed ? "listed" : "you want to recalibrate")
+              << " fully down twice, holding it at the bottom for a moment.\n"
+                 "A key you press but do not finish keeps a default bottom value until it is calibrated again.\n"
+                 "The session ends by itself " << idle_s << " s after the last key is done (Ctrl+C ends it early).\n";
+    kb.start_calibration();
+    {
+        CalibrationGuard guard{kb, keep_stream};
+        enum class St { Unknown, Calibrated, NotCalibrated, Progress, Done };
+        std::vector<St> st(static_cast<std::size_t>(nkeys), St::Unknown);
+        std::vector<int> status(static_cast<std::size_t>(nkeys), 0xFF);
+        std::vector<bool> touched(static_cast<std::size_t>(nkeys), false);
+        auto last_activity = std::chrono::steady_clock::now();
+        const auto started = last_activity;
+        bool reported_uncalibrated = false;
+        while (!g_stop) {
+            auto rep = kb.session().transport().read(std::chrono::milliseconds(200));
+            const auto now = std::chrono::steady_clock::now();
+            if (rep) {
+                if (auto s = parse_depth_sample(*rep)) {
+                    auto it = index_of.find(s->key.bytes());
+                    if (it == index_of.end())
+                        continue;
+                    const auto k = static_cast<std::size_t>(it->second);
+                    if (s->pressed)
+                        touched[k] = true;
+                    if (s->pressed || s->travel > 0)
+                        last_activity = now;
+                    const St before = st[k];
+                    // Not FF: half-way if the key was pressed or was calibrated before (the firmware reset it),
+                    // else it was never calibrated.
+                    if (s->calibration != 0xFF)
+                        st[k] = touched[k] || before == St::Calibrated || before == St::Done ? St::Progress : St::NotCalibrated;
+                    else if (before == St::Progress)
+                        st[k] = St::Done;
+                    else if (before == St::Unknown)
+                        st[k] = St::Calibrated;
+                    if (st[k] == St::Progress && s->calibration != status[k])
+                        std::cout << name(it->second) << ": " << (s->calibration == 0 ? "press fully down" : "once more") << "\n";
+                    if (st[k] == St::Done && before != St::Done) {
+                        const auto done = std::count(st.begin(), st.end(), St::Done);
+                        std::cout << name(it->second) << ": done (" << done << " key" << (done == 1 ? "" : "s") << ")\n";
+                    }
+                    status[k] = s->calibration;
+                    std::cout.flush();
+                }
+            }
+            // The two full sweeps after 0xA8 take ~4 s; then say which keys were never calibrated.
+            if (!reported_uncalibrated && now - started > std::chrono::seconds(5)) {
+                reported_uncalibrated = true;
+                std::string list;
+                for (int i = 0; i < nkeys; ++i)
+                    if (st[static_cast<std::size_t>(i)] == St::NotCalibrated)
+                        list += " " + name(i);
+                if (!list.empty())
+                    std::cout << "not calibrated:" << list << "\n";
+            }
+            // Finished: no key half-way, the listed keys (or at least one key) done, and the keyboard idle.
+            bool in_progress = false, listed_done = true;
+            int done = 0;
+            for (int i = 0; i < nkeys; ++i) {
+                const auto k = static_cast<std::size_t>(i);
+                in_progress = in_progress || st[k] == St::Progress;
+                listed_done = listed_done && (!wanted[k] || st[k] == St::Done);
+                done += st[k] == St::Done;
+            }
+            if (!in_progress && (listed ? listed_done : done > 0) && now - last_activity > std::chrono::duration<double>(idle_s))
+                break;
+        }
+        std::string unfinished;
+        for (int i = 0; i < nkeys; ++i)
+            if (st[static_cast<std::size_t>(i)] == St::Progress || (listed && wanted[static_cast<std::size_t>(i)] && st[static_cast<std::size_t>(i)] != St::Done))
+                unfinished += " " + name(i);
+        if (!unfinished.empty())
+            std::cerr << "not finished (default bottom value until calibrated again):" << unfinished << "\n";
+    }
+    discard_typed_input();
+    return 0;
+}
+
 int cmd_gamepad(Tool& t)
 {
 #ifdef MCHOSE_HAVE_GAMEPAD
@@ -1110,6 +1264,7 @@ int main(int argc, char** argv)
         if (c == "backup") return cmd_backup(t);
         if (c == "restore") return cmd_restore(t);
         if (c == "depth") return cmd_depth(t);
+        if (c == "calibrate") return cmd_calibrate(t);
         if (c == "gamepad") return cmd_gamepad(t);
         std::cerr << "unknown command '" << c << "'\n\n" << kUsage;
         return 2;

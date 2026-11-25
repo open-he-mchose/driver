@@ -106,6 +106,16 @@ void Worker::connectDevice()
         }
         player_.reset();
         stopGamepadQuietly();
+        if (calibrating_) {
+            if (kb_) {
+                try {
+                    kb_->end_calibration(calibKeepStream_);
+                } catch (...) {
+                }
+            }
+            calibrating_ = false;
+            emit calibrationChanged(false);
+        }
         kb_.reset();
         transport_.reset();
         auto devs = hid::enumerate();
@@ -739,6 +749,8 @@ void Worker::pollStream()
                 if (it != factoryIndex_.end()) {
                     const double mm = depth_mm(*s);
                     emit depth(it->second, mm, s->pressed);
+                    if (calibrating_)
+                        emit calibSample(it->second, s->calibration, s->pressed);
                     if (mapper_ && pad_ && mapper_->uses(it->second)) {
                         mapper_->set_depth(it->second, mm);
                         const auto st = mapper_->state();
@@ -759,4 +771,60 @@ void Worker::pollStream()
         emit streamingChanged(false);
         emit message(QString::fromStdString(e.what()), true);
     }
+}
+
+// ---------------------------------------------------------------- calibration
+
+void Worker::calibStart()
+{
+    if (!ready() || calibrating_)
+        return;
+    emit busyChanged(true);
+    try {
+        if (scriptTimer_->isActive()) {
+            scriptTimer_->stop();
+            emit scriptRunningChanged(false);
+        }
+        if (pad_)
+            gamepadStop();
+        calibKeepStream_ = streamTimer_->isActive();
+        autoBackup();
+        kb_->start_calibration();   // also starts the depth stream, with two full sweeps
+        calibrating_ = true;
+        streamTimer_->start();
+        emit streamingChanged(true);
+        emit calibrationChanged(true);
+    } catch (const std::exception& e) {
+        emit message(QString::fromStdString(e.what()), true);
+    }
+    emit busyChanged(false);
+}
+
+void Worker::calibEnd()
+{
+    if (!kb_ || !calibrating_)
+        return;
+    emit busyChanged(true);
+    try {
+        kb_->end_calibration(calibKeepStream_);
+        emit message(tr("Calibration session ended"), false);
+    } catch (const std::exception& e) {
+        emit message(tr("Could not end the calibration session: %1 (unplug and replug the keyboard to end it)")
+                         .arg(QString::fromStdString(e.what())), true);
+    }
+    calibrating_ = false;
+    if (!calibKeepStream_) {
+        streamTimer_->stop();
+        emit streamingChanged(false);
+    }
+    emit calibrationChanged(false);
+    emit busyChanged(false);
+}
+
+void Worker::calibReset()
+{
+    run(tr("Calibration of all keys reset; now calibrate every key"), [&] {
+        autoBackup();
+        kb_->reset_calibration();
+    }, false);
 }

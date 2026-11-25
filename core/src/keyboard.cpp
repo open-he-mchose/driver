@@ -18,6 +18,8 @@ std::optional<DepthSample> parse_depth_sample(const Report& r)
     s.travel = be16(6);
     s.pressed = r[9] == 0x01;
     s.calibrated = r[10] == 0xFF;
+    s.calibration = r[10];
+    s.bottom = (r[11] * 1000 + r[12] * 100 + r[13] * 10) * 4;   // value / 4 as decimal digits (thousands..tens)
     s.max_travel = be16(14);
     s.adc = be16(16);
     s.adc_rest = be16(18) * 4;
@@ -180,6 +182,11 @@ void Keyboard::set_funcconfig(int profile, const FuncConfig& fc, const WriteOpti
         if (profile == active_profile() && !opt.allow_reboot)
             throw SafetyError("changing the report rate of the active profile reboots the keyboard");
     }
+    write_funcconfig(profile, fc);
+}
+
+void Keyboard::write_funcconfig(int profile, const FuncConfig& fc)
+{
     // Same as the official driver: two overlapping 56-byte packets (offset 0 and 8).
     const int base = model_.funcconfig_offset(profile);
     count_write(2);
@@ -289,6 +296,33 @@ void Keyboard::set_depth_stream(bool on)
         return;
     fc.set_debug_mode(on);
     set_funcconfig(p, fc);
+}
+
+// --- calibration ----------------------------------------------------------------------------------
+
+void Keyboard::start_calibration()
+{
+    const std::uint8_t zero = 0;
+    session_.transact(cmd::CalibrationStart, 0, 1, std::span<const std::uint8_t>(&zero, 1));
+}
+
+void Keyboard::end_calibration(bool keep_stream)
+{
+    const std::uint8_t zero = 0;
+    session_.transact(cmd::CalibrationEnd, 0, 1, std::span<const std::uint8_t>(&zero, 1));
+    const int p = active_profile();
+    FuncConfig fc = funcconfig(p);
+    fc.set_debug_mode(keep_stream);
+    if (!fc.marker_ok())
+        throw SafetyError("FuncConfig without the AA BB marker would be replaced by firmware defaults");
+    write_funcconfig(p, fc);   // always: the RAM bit set by 0xA8 may not show in what 0x05 returns
+}
+
+void Keyboard::reset_calibration()
+{
+    count_write(1);
+    const std::uint8_t zero = 0;
+    session_.transact(cmd::CalibrationReset, 0, 1, std::span<const std::uint8_t>(&zero, 1));
 }
 
 // --- backup / restore -----------------------------------------------------------------------------

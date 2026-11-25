@@ -368,6 +368,30 @@
         <source>Quit</source>
         <translation>Выйти</translation>
     </message>
+    <message>
+        <source>Switch calibration</source>
+        <translation>Калибровка свитчей</translation>
+    </message>
+    <message>
+        <source>Calibrate…</source>
+        <translation>Калибровать…</translation>
+    </message>
+    <message>
+        <source>Reset all keys…</source>
+        <translation>Сбросить все клавиши…</translation>
+    </message>
+    <message>
+        <source>Calibrate keys whose travel or actuation feels wrong: press each of them fully down twice. Calibration is stored in the keyboard and is not part of backups.</source>
+        <translation>Калибруйте клавиши, у которых ход или срабатывание ощущаются неправильно: нажмите каждую до упора два раза. Калибровка хранится в клавиатуре и в резервные копии не входит.</translation>
+    </message>
+    <message>
+        <source>Reset the calibration of all keys?</source>
+        <translation>Сбросить калибровку всех клавиш?</translation>
+    </message>
+    <message>
+        <source>Every key gets the default bottom value (the same as holding Fn+Backspace for 3 s). A calibration session starts right after: press every key fully down twice. This cannot be undone.</source>
+        <translation>Все клавиши получат нижнее значение по умолчанию (как при удержании Fn+Backspace 3 с). Сразу после этого начнётся калибровка: нажмите каждую клавишу до упора два раза. Отменить это нельзя.</translation>
+    </message>
 </context>
 <context>
     <name>GamepadPanel</name>
@@ -1091,6 +1115,18 @@
         <source>stopped</source>
         <translation>остановлен</translation>
     </message>
+    <message>
+        <source>Calibration session ended</source>
+        <translation>Калибровка завершена</translation>
+    </message>
+    <message>
+        <source>Could not end the calibration session: %1 (unplug and replug the keyboard to end it)</source>
+        <translation>Не удалось завершить калибровку: %1 (переподключите клавиатуру, чтобы её завершить)</translation>
+    </message>
+    <message>
+        <source>Calibration of all keys reset; now calibrate every key</source>
+        <translation>Калибровка всех клавиш сброшена; теперь откалибруйте каждую клавишу</translation>
+    </message>
 </context>
 <context>
     <name>Tray</name>
@@ -1121,6 +1157,45 @@
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+</context>
+<context>
+    <name>CalibrationPanel</name>
+    <message>
+        <source>Switch calibration</source>
+        <translation>Калибровка свитчей</translation>
+    </message>
+    <message>
+        <source>Press each key you want to calibrate all the way down and hold it there for a moment, twice. The keys show 0/2, 1/2 and ✓ when done. Keys you do not press keep their calibration.</source>
+        <translation>Нажмите каждую клавишу, которую хотите откалибровать, до упора и задержите на мгновение — два раза. На клавишах появится 0/2, 1/2 и ✓, когда готово. Клавиши, которые вы не нажимаете, сохраняют свою калибровку.</translation>
+    </message>
+    <message>
+        <source>Press firmly to the bottom: a key held part-way can be stored with a wrong bottom value. A key you press but do not finish keeps a default value until it is calibrated again. Key presses do not reach this window; system shortcuts (like the Win key) still work.</source>
+        <translation>Нажимайте до самого упора: клавиша, задержанная на полпути, может сохраниться с неверным нижним значением. Нажатая, но не законченная клавиша получает значение по умолчанию, пока её не откалибруют снова. Нажатия не попадают в это окно; системные сочетания (например, клавиша Win) продолжают работать.</translation>
+    </message>
+    <message>
+        <source>Done: %1</source>
+        <translation>Готово: %1</translation>
+    </message>
+    <message>
+        <source>Half-way: %1</source>
+        <translation>Не закончены: %1</translation>
+    </message>
+    <message>
+        <source>Never calibrated: %1</source>
+        <translation>Не калибровались: %1</translation>
+    </message>
+    <message>
+        <source>Finish calibration</source>
+        <translation>Завершить калибровку</translation>
+    </message>
+    <message>
+        <source>Keys not finished</source>
+        <translation>Клавиши не закончены</translation>
+    </message>
+    <message>
+        <source>%1 keep a default bottom value until they are calibrated again (press them twice more now, or run the calibration later). Finish anyway?</source>
+        <translation>%1 — у этих клавиш останется нижнее значение по умолчанию, пока их не откалибруют снова (нажмите их ещё два раза сейчас или повторите калибровку позже). Всё равно завершить?</translation>
     </message>
 </context>
 </TS>

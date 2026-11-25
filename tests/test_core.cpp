@@ -504,6 +504,40 @@ TEST(profile_rotation)
     CHECK_THROWS(k.set_rotation({}), std::invalid_argument);
 }
 
+TEST(calibration_session)
+{
+    FakeKeyboard kb;
+    Keyboard k(kb, *find_model(0x41E4, 0x211A));
+    k.start_calibration();
+    CHECK(kb.calibrating);
+    CHECK_EQ(int(kb.sent.back()[1]), 0xA8);
+    const int before = kb.flash_writes;
+    k.end_calibration(false);                                 // the bit is already clear in FuncConfig ...
+    CHECK(!kb.calibrating);
+    CHECK_EQ(kb.flash_writes - before, 2);                    // ... but it is written anyway (0xA8 set it in RAM)
+    CHECK(!k.funcconfig(0).debug_mode());
+    k.start_calibration();
+    k.end_calibration(true);                                  // keep the stream the user had on
+    CHECK(k.funcconfig(0).debug_mode());
+    k.reset_calibration();
+    CHECK_EQ(kb.calibration_resets, 1);
+}
+
+TEST(depth_sample_calibration_fields)
+{
+    Report r{};
+    r[0] = 0xA0;
+    r[1] = 0x10; r[2] = 0x00; r[3] = 0x04;                    // A
+    r[9] = 0xFF;
+    r[10] = 0x01;                                             // second press pending
+    r[11] = 0; r[12] = 4; r[13] = 6;                          // bottom / 4 = 46x
+    auto s = parse_depth_sample(r);
+    CHECK(s.has_value());
+    CHECK_EQ(s->calibration, 1);
+    CHECK(!s->calibrated);
+    CHECK_EQ(s->bottom, 1840);
+}
+
 TEST(restore_coalesces_adjacent_entries)
 {
     FakeKeyboard kb;

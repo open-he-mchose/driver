@@ -69,6 +69,7 @@ mchosectl adv dks 1 --action W:1,0,0,0 --action E:0,1,0,0 --action R:0,0,1,0 --a
 mchosectl adv [show|doctor] | adv clear KEY
 mchosectl backup [FILE] | restore FILE          everything except calibration; restore writes only differences
 mchosectl depth                       live key depth (Ctrl+C to stop)
+mchosectl calibrate [KEY...]          switch calibration (see below); calibrate --reset --yes resets all keys
 ```
 
 Close the official web driver while using it: two programs on the same interface take each other's replies.
@@ -141,6 +142,18 @@ In the GUI: the Gamepad tab (presets, map the selected keys, travel sliders, liv
 - The gamepad and Lua effects cannot run together: the firmware pauses the depth stream for ~0.6 s after every
   packet from the computer, and live colours are sent constantly.
 
+## Calibration
+
+If a key's travel or actuation feels wrong, calibrate it: in the GUI, Device tab → **Calibrate…**, or
+`mchosectl calibrate`. Press each key to calibrate fully down twice, holding it at the bottom for a moment; the
+keyboard view shows `0/2` → `1/2` → `✓` (`!` = never calibrated). Keys you do not press keep their calibration.
+Press firmly: a key held part-way can be stored with a wrong bottom value, and a key pressed but not finished keeps
+a default value until it is calibrated again. The GUI ends the session with a mouse click and keeps key presses
+away from its controls; `mchosectl calibrate` ends by itself once the pressed (or listed) keys are done and the
+keyboard was idle for 8 s (`--idle S`). Lua effects and the gamepad pause during the session. Calibration is
+stored in the keyboard and is not part of backups. "Reset all keys" (`0xB1`, like holding Fn+Backspace for 3 s)
+asks first and starts a session right after. Protocol: [calibration](https://open-he-mchose.github.io/protocols/glw/calibration/).
+
 ## Build
 
 Requirements: CMake ≥ 3.21, a C++20 compiler (GCC 11+, Clang 14+, MSVC 2022), hidapi. If hidapi is not
@@ -169,9 +182,10 @@ CI builds for Linux and Windows are attached to every run of the `build` workflo
 Done and tested on a Jet75-II: info, profiles (switch, rotation, copy), report rate, lighting (effects,
 stored and live colours), trigger settings, keymap, macros, advanced keys (DKS, Toggle, Mod-Tap, RS, SOCD, LT,
 doctor), backup / restore, depth stream, safety guards, Lua lighting effects, the Qt GUI; unit tests and
-Linux / Windows CI; releases; Linux AppImage; depth graph; virtual gamepad; Russian translation.
+Linux / Windows CI; releases; Linux AppImage; depth graph; virtual gamepad; Russian translation; background
+mode with saved effects; switch calibration.
 
-Next: switch calibration, precise depth from travel curves, more models.
+Next: precise depth from travel curves, more models.
 
 ## License
 

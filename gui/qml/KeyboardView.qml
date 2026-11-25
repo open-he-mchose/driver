@@ -6,7 +6,7 @@ import QtQuick.Controls
 
 Item {
     id: root
-    property string overlay: "actuation"   // actuation | mapping | color | depth | gamepad | none
+    property string overlay: "actuation"   // actuation | mapping | color | depth | gamepad | calibration | none
     property bool picker: false               // palette mode: clicking a key emits picked() instead of selecting
     signal picked(int matrixIndex)
     // fixedUnit > 0: every key unit is that many pixels and the view has that implicit size (it never changes);
@@ -79,6 +79,9 @@ Item {
             required property bool dangerous
             required property string liveColor
             required property string gamepadLabel
+            required property string calib
+            readonly property bool calibDone: root.overlay === "calibration" && calib === "done"
+            readonly property bool calibBusy: root.overlay === "calibration" && calib.startsWith("progress")
 
             x: root.ox + kx * root.u + 2
             y: root.oy + ky * root.u + 2
@@ -90,8 +93,8 @@ Item {
                 anchors.fill: parent
                 radius: 6
                 color: key.pressed ? palette.midlight : palette.button
-                border.width: key.selected && !root.picker ? 2 : 1
-                border.color: key.selected && !root.picker ? palette.highlight : palette.mid
+                border.width: key.calibDone ? 3 : key.calibBusy ? 2 : key.selected && !root.picker ? 2 : 1
+                border.color: key.calibDone || key.calibBusy || (key.selected && !root.picker) ? palette.highlight : palette.mid
                 clip: true
 
                 // Depth fill (live stream).
@@ -141,11 +144,15 @@ Item {
                 elide: Text.ElideRight
                 font.pixelSize: Math.max(8, root.u * 0.18)
                 color: (root.overlay === "mapping" && key.remapped) || (root.overlay === "actuation" && key.mode > 0)
-                       || root.overlay === "gamepad" ? palette.highlight : palette.placeholderText
+                       || root.overlay === "gamepad" || key.calibDone || key.calibBusy ? palette.highlight
+                       : root.overlay === "calibration" && key.calib === "needed" ? palette.windowText : palette.placeholderText
+                font.bold: root.overlay === "calibration"
                 text: root.overlay === "actuation" ? key.actuation.toFixed(2)
                     : root.overlay === "mapping" ? ((key.dangerous ? "⚠ " : "") + (key.remapped || key.dangerous || backend.keys.layer > 0 ? key.mapping : ""))
                     : root.overlay === "depth" ? (key.depth > 0 ? key.depth.toFixed(2) : "")
                     : root.overlay === "gamepad" ? key.gamepadLabel + (key.depth > 0 ? " " + key.depth.toFixed(1) : "")
+                    : root.overlay === "calibration" ? (key.calib === "done" ? "✓" : key.calib === "progress1" ? "1/2"
+                                                      : key.calib === "progress" ? "0/2" : key.calib === "needed" ? "!" : "")
                     : ""
             }
             ToolTip.visible: tipArea.containsMouse && !root.picker && root.overlay === "mapping" && key.mapping.length > 0

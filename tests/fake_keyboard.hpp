@@ -19,6 +19,8 @@ public:
     int flash_writes = 0;
     int profile_switches = 0;
     int drop_requests = 0;                                  // swallow the next N requests
+    bool calibrating = false;                               // between 0xA8 and 0xA9
+    int calibration_resets = 0;                             // 0xB1
 
     FakeKeyboard()
     {
@@ -129,6 +131,9 @@ public:
         case cmd::SetMt: write_region(cmd::GetMt); ++flash_writes; break;
         case cmd::SetTgl: write_region(cmd::GetTgl); ++flash_writes; break;
         case cmd::LiveColorsMain: write_region(0xDD); break;
+        case cmd::CalibrationStart: calibrating = true; break;
+        case cmd::CalibrationEnd: calibrating = false; break;
+        case cmd::CalibrationReset: ++calibration_resets; ++flash_writes; break;
         default: {
             rep[0] = kReplyError;
             const char* e = "unknw";

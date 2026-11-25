@@ -96,6 +96,18 @@ Pane {
                     opacity: 0.7
                     text: qsTr("A full backup is saved automatically before the first change of every session. Backups are compatible with mchosectl.")
                 }
+
+                Label { text: qsTr("Switch calibration"); font.bold: true; Layout.topMargin: 6 }
+                RowLayout {
+                    Button { text: qsTr("Calibrate…"); enabled: panel.canWrite; onClicked: backend.startCalibration() }
+                    Button { text: qsTr("Reset all keys…"); enabled: panel.canWrite; onClicked: resetDialog.open() }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    opacity: 0.7
+                    text: qsTr("Calibrate keys whose travel or actuation feels wrong: press each of them fully down twice. Calibration is stored in the keyboard and is not part of backups.")
+                }
             }
 
             // ---- right column
@@ -157,6 +169,23 @@ Pane {
         }
     }
 
+    Dialog {
+        id: resetDialog
+        anchors.centerIn: Overlay.overlay
+        modal: true
+        title: qsTr("Reset the calibration of all keys?")
+        standardButtons: Dialog.Reset | Dialog.Cancel
+        Label {
+            width: 440
+            wrapMode: Text.WordWrap
+            text: qsTr("Every key gets the default bottom value (the same as holding Fn+Backspace for 3 s). A calibration session starts right after: press every key fully down twice. This cannot be undone.")
+        }
+        onReset: {
+            backend.resetCalibration()
+            backend.startCalibration()
+            close()
+        }
+    }
     FileDialog {
         id: saveDialog
         fileMode: FileDialog.SaveFile

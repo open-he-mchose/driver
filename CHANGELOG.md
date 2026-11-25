@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Switch calibration**, tested on all keys of a Jet75-II: GUI (Device tab → Calibrate…: per-key status
+  0/2 → 1/2 → ✓ on the keyboard view, key presses kept away from the window, finished with the mouse, warning for
+  half-done keys; Lua effect / gamepad paused and restarted) and `mchosectl calibrate [KEY...]` (ends by itself
+  when the keys are done and the keyboard is idle). Reset of all keys (`0xB1`) behind a confirmation
+  (`calibrate --reset --yes`)
+- core: `Keyboard::start_calibration` / `end_calibration` / `reset_calibration`; depth samples carry the raw
+  calibration status and the stored bottom value
+
 ## 0.3.1 (2026-11-25)
 
 - GUI: **one program per user**. Starting `mchose-gui` again shows the running program's window instead of a

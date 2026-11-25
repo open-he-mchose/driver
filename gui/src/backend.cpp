@@ -75,6 +75,18 @@ Backend::Backend(QObject* parent) : QObject(parent)
     });
     connect(worker_, &Worker::scriptColors, this, [this](const QByteArray& rgb) { keys_.setLiveColors(rgb); });
     connect(&macroEditor_, &MacroModel::message, this, &Backend::message);
+    connect(this, &Backend::doCalibStart, worker_, &Worker::calibStart);
+    connect(this, &Backend::doCalibEnd, worker_, &Worker::calibEnd);
+    connect(this, &Backend::doCalibReset, worker_, &Worker::calibReset);
+    connect(worker_, &Worker::calibSample, this, [this](int key, int status, bool pressed) { keys_.setCalibration(key, status, pressed); });
+    connect(worker_, &Worker::calibrationChanged, this, [this](bool on) {
+        if (on)
+            keys_.resetCalibration();
+        calibrating_ = on;
+        emit calibratingChanged();
+        if (!on && connected_)
+            restoreEffect();   // the Lua effect or gamepad that was stopped for the session
+    });
 
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
         connected_ = on;
@@ -106,6 +118,8 @@ Backend::Backend(QObject* parent) : QObject(parent)
 
 Backend::~Backend()
 {
+    if (calibrating_)
+        QMetaObject::invokeMethod(worker_, "calibEnd", Qt::BlockingQueuedConnection);
     if (gamepadRunning_)
         QMetaObject::invokeMethod(worker_, "gamepadStop", Qt::BlockingQueuedConnection);
     if (scriptRunning_)
@@ -447,9 +461,13 @@ void Backend::setRunningEffect(const QString& kind)
 
 // Called on every connect (start, the Connect button, the reconnect after a report-rate change): starts the effect
 // that was running when the program was closed.
+void Backend::startCalibration() { emit doCalibStart(); }
+void Backend::finishCalibration() { emit doCalibEnd(); }
+void Backend::resetCalibration() { emit doCalibReset(); }
+
 void Backend::restoreEffect()
 {
-    if (!persist_ || scriptRunning_ || gamepadRunning_)
+    if (!persist_ || scriptRunning_ || gamepadRunning_ || calibrating_)
         return;
     QSettings st;
     const QString kind = st.value("effect/running").toString();

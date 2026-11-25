@@ -14,7 +14,7 @@ void KeyModel::setLayout(std::span<const mchose::KeyCap> layout)
     height_ = 0;
     for (const auto& cap : layout) {
         rowOfIndex_[cap.index] = static_cast<int>(keys_.size());
-        keys_.push_back({cap, {}, 0, false, false, {}, {}});
+        keys_.push_back({cap, {}, 0, false, false, {}, {}, Calib::Unknown, 0xFF, false});
         width_ = std::max(width_, static_cast<double>(cap.x + cap.w));
         height_ = std::max(height_, static_cast<double>(cap.y + 1));
     }
@@ -77,6 +77,57 @@ void KeyModel::setGamepadLabels(const QHash<int, QString>& labels)
         emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {GamepadRole});
 }
 
+// Not FF: half-way when the key was pressed or was calibrated before (the firmware reset it), else it was never
+// calibrated. FF after half-way: done.
+void KeyModel::setCalibration(int matrixIndex, int status, bool pressed)
+{
+    if (matrixIndex < 0 || matrixIndex >= rowOfIndex_.size() || rowOfIndex_[matrixIndex] < 0)
+        return;
+    const int row = rowOfIndex_[matrixIndex];
+    Item& k = keys_[row];
+    if (pressed)
+        k.touched = true;
+    const Calib before = k.calib;
+    if (status != 0xFF)
+        k.calib = k.touched || before == Calib::Calibrated || before == Calib::Done ? Calib::Progress : Calib::Needed;
+    else if (before == Calib::Progress)
+        k.calib = Calib::Done;
+    else if (before == Calib::Unknown || before == Calib::Needed)
+        k.calib = before == Calib::Needed ? Calib::Done : Calib::Calibrated;
+    if (k.calib != before || k.calibStatus != status) {
+        k.calibStatus = status;
+        emit dataChanged(index(row), index(row), {CalibRole});
+        emit calibrationChanged();
+    }
+}
+
+void KeyModel::resetCalibration()
+{
+    for (auto& k : keys_) {
+        k.calib = Calib::Unknown;
+        k.calibStatus = 0xFF;
+        k.touched = false;
+    }
+    if (!keys_.isEmpty())
+        emit dataChanged(index(0), index(static_cast<int>(keys_.size()) - 1), {CalibRole});
+    emit calibrationChanged();
+}
+
+int KeyModel::countCalib(Calib c) const
+{
+    return static_cast<int>(std::count_if(keys_.begin(), keys_.end(), [c](const Item& k) { return k.calib == c; }));
+}
+
+QStringList KeyModel::calibKeys(const QString& state) const
+{
+    const Calib want = state == "progress" ? Calib::Progress : Calib::Needed;
+    QStringList l;
+    for (const auto& k : keys_)
+        if (k.calib == want)
+            l << QString::fromUtf8(k.cap.label);
+    return l;
+}
+
 void KeyModel::clearDepth()
 {
     for (auto& k : keys_) {
@@ -111,6 +162,14 @@ QVariant KeyModel::data(const QModelIndex& idx, int role) const
     case DangerousRole: return k.settings.dangerous[static_cast<std::size_t>(layer_)];
     case LiveColorRole: return k.live;
     case GamepadRole: return k.gamepad;
+    case CalibRole:   // "", "calibrated", "needed", "progress" (+ "1" after the first deep press), "done"
+        switch (k.calib) {
+        case Calib::Calibrated: return QStringLiteral("calibrated");
+        case Calib::Needed: return QStringLiteral("needed");
+        case Calib::Progress: return k.calibStatus == 1 ? QStringLiteral("progress1") : QStringLiteral("progress");
+        case Calib::Done: return QStringLiteral("done");
+        default: return QString();
+        }
     default: return {};
     }
 }
@@ -121,7 +180,7 @@ QHash<int, QByteArray> KeyModel::roleNames() const
             {WRole, "kw"},              {MappingRole, "mapping"}, {ActuationRole, "actuation"}, {ModeRole, "mode"},
             {PressRole, "rtPress"},     {ReleaseRole, "rtRelease"}, {ColorRole, "keyColor"}, {DepthRole, "depth"},
             {PressedRole, "pressed"},   {SelectedRole, "selected"}, {RemappedRole, "remapped"},
-            {DangerousRole, "dangerous"}, {LiveColorRole, "liveColor"}, {GamepadRole, "gamepadLabel"}};
+            {DangerousRole, "dangerous"}, {LiveColorRole, "liveColor"}, {GamepadRole, "gamepadLabel"}, {CalibRole, "calib"}};
 }
 
 void KeyModel::select(int row, bool add)

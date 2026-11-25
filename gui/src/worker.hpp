@@ -90,6 +90,10 @@ public slots:
     void setStreaming(bool on);
     void gamepadStart(QString config);   // mapping text (mchose::gamepad::parse_config); turns the depth stream on
     void gamepadStop();
+    // Switch calibration (0xA8 / 0xA9 / 0xB1). Stops a Lua effect or the gamepad (both need the host link).
+    void calibStart();
+    void calibEnd();
+    void calibReset();
 
 signals:
     void connectedChanged(bool connected, QString model);
@@ -104,6 +108,8 @@ signals:
     void scriptColors(QByteArray rgb);           // 3 bytes per matrix index, after every frame
     void gamepadRunningChanged(bool running, QString status);
     void gamepadState(QVariantMap state);        // lx ly rx ry (-1..1, +y up), lt rt (0..1), buttons [names]
+    void calibrationChanged(bool on);
+    void calibSample(int key, int status, bool pressed);   // raw status: FF calibrated, 00 / 01 in progress
 
 private:
     bool ready();
@@ -126,4 +132,6 @@ private:
     std::unique_ptr<mchose::gamepad::Mapper> mapper_;
     void stopGamepadQuietly();
     bool backedUp_ = false;
+    bool calibrating_ = false;
+    bool calibKeepStream_ = false;   // the depth stream was on before the session
 };
