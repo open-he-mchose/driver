@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 (2026-11-25)
 
 - **Switch calibration**, tested on all keys of a Jet75-II: GUI (Device tab → Calibrate…: per-key status
   0/2 → 1/2 → ✓ on the keyboard view, key presses kept away from the window, finished with the mouse, warning for
