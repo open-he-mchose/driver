@@ -48,6 +48,10 @@ class Backend : public QObject {
     Q_PROPERTY(bool gamepadRunning READ gamepadRunning NOTIFY gamepadChanged)
     Q_PROPERTY(QString gamepadStatus READ gamepadStatus NOTIFY gamepadChanged)
     Q_PROPERTY(QVariantMap gamepadLive READ gamepadLive NOTIFY gamepadLiveChanged)
+    // Application settings (QSettings).
+    Q_PROPERTY(bool keepInBackground READ keepInBackground WRITE setKeepInBackground NOTIFY appSettingsChanged)
+    Q_PROPERTY(bool startAtLogin READ startAtLogin WRITE setStartAtLogin NOTIFY appSettingsChanged)
+    Q_PROPERTY(bool startAtLoginSupported READ startAtLoginSupported CONSTANT)
 public:
     explicit Backend(QObject* parent = nullptr);
     ~Backend() override;
@@ -84,6 +88,14 @@ public:
     bool gamepadRunning() const { return gamepadRunning_; }
     QString gamepadStatus() const { return gamepadStatus_; }
     QVariantMap gamepadLive() const { return gamepadLive_; }
+    bool keepInBackground() const;
+    void setKeepInBackground(bool on);
+    bool startAtLogin() const;
+    void setStartAtLogin(bool on);
+    bool startAtLoginSupported() const;
+
+    // false: nothing is read from or written to the settings (screenshots for docs and CI).
+    void setPersistent(bool on) { persist_ = on; }
 
     Q_INVOKABLE void connectDevice();
     Q_INVOKABLE void refresh();
@@ -117,9 +129,15 @@ public:
     Q_INVOKABLE QString readTextFile(const QUrl& file);
     Q_INVOKABLE bool writeTextFile(const QUrl& file, const QString& text);
     Q_INVOKABLE void runScript(const QString& source, const QString& name, const QVariantMap& values = {});
-    Q_INVOKABLE void previewParams(const QString& source);   // parameters of a script before it runs
+    Q_INVOKABLE void previewParams(const QString& source, const QVariantMap& values = {});   // before it runs
     Q_INVOKABLE void stopScript();
     Q_INVOKABLE void setScriptParam(const QString& name, double value);
+    // Parameter values the user set for a script (by its name), kept across restarts.
+    Q_INVOKABLE QVariantMap savedParams(const QString& script) const;
+    Q_INVOKABLE void saveParams(const QString& script, const QVariantMap& values);
+    // Small UI state (editor texts, window size), kept across restarts.
+    Q_INVOKABLE QVariant uiValue(const QString& key, const QVariant& def = {}) const;
+    Q_INVOKABLE void setUiValue(const QString& key, const QVariant& value);
     // Gamepad: the mapping is edited as text (see mchose/gamepad/gamepad.hpp); these helpers edit that text.
     Q_INVOKABLE QString gamepadPreset(const QString& name) const;
     Q_INVOKABLE QVariantMap gamepadCheck(const QString& text);   // {ok, error, count, deadzone, full, button}; updates the key labels
@@ -143,6 +161,7 @@ signals:
     void scriptLog(QString line, bool error);
     void gamepadChanged();
     void gamepadLiveChanged();
+    void appSettingsChanged();
 
     // to the worker thread
     void doConnect();
@@ -191,4 +210,8 @@ private:
     std::optional<int> keyByName(QStringView name) const;   // factory name or #N -> matrix index
     QString keyName(int index) const;
     QVariantList scriptParams_;
+    bool persist_ = true;
+    QString runningScript_;   // name the parameter changes are saved under
+    void setRunningEffect(const QString& kind);   // "", "script" or "gamepad": started again on the next connect
+    void restoreEffect();
 };

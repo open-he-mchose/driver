@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QSettings>
+#include <QStandardPaths>
 
 #include "mchose/glw/advanced.hpp"
 #include "mchose/script/lighting_script.hpp"
@@ -74,6 +79,8 @@ Backend::Backend(QObject* parent) : QObject(parent)
     connect(worker_, &Worker::connectedChanged, this, [this](bool on, const QString&) {
         connected_ = on;
         emit connectedChanged();
+        if (on)
+            restoreEffect();
     });
     connect(worker_, &Worker::refreshed, this, [this](const Snapshot& s) {
         snap_ = s;
@@ -345,16 +352,27 @@ bool Backend::writeTextFile(const QUrl& file, const QString& text)
 
 void Backend::runScript(const QString& source, const QString& name, const QVariantMap& values)
 {
+    if (persist_) {
+        QSettings st;
+        // An unchanged example is stored by name only, so that program updates reach it.
+        st.setValue("effect/scriptSource", source == exampleSource(name) ? QString() : source);
+        st.setValue("effect/scriptName", name);
+        saveParams(name, values);
+        setRunningEffect("script");
+    }
+    runningScript_ = name;
     emit doScriptRun(source, name, values);
 }
 
-void Backend::previewParams(const QString& source)
+void Backend::previewParams(const QString& source, const QVariantMap& values)
 {
     QVariantList params;
     try {
         mchose::script::LightingScript s({}, 128, 1, 1);
         s.set_instruction_limit(2'000'000);
         s.load(source.toStdString(), "preview");
+        for (auto it = values.cbegin(); it != values.cend(); ++it)
+            s.set_param(it.key().toStdString(), it.value().toDouble());
         for (const auto& p : s.params())
             params.push_back(QVariantMap{{"name", QString::fromStdString(p.name)}, {"label", QString::fromStdString(p.label)},
                                          {"min", p.min}, {"max", p.max}, {"value", p.value}, {"def", p.def}, {"step", p.step}});
@@ -364,8 +382,181 @@ void Backend::previewParams(const QString& source)
     scriptParams_ = params;
     emit scriptParamsChanged();
 }
-void Backend::stopScript() { emit doScriptStop(); }
-void Backend::setScriptParam(const QString& name, double value) { emit doScriptParam(name, value); }
+void Backend::stopScript()
+{
+    if (persist_ && QSettings().value("effect/running").toString() == "script")
+        setRunningEffect({});
+    emit doScriptStop();
+}
+
+void Backend::setScriptParam(const QString& name, double value)
+{
+    if (persist_ && !runningScript_.isEmpty())
+        QSettings().setValue("scriptParams/" + runningScript_ + "/" + name, value);
+    emit doScriptParam(name, value);
+}
+
+// ---------------------------------------------------------------- settings
+// Stored with QSettings (Linux: ~/.config/open-he-mchose/mchose-gui.conf; Windows: the registry, HKCU\Software\open-he-mchose).
+//   effect/running        "script", "gamepad" or empty: what is started again when the keyboard connects
+//   effect/scriptSource (empty: the built-in example effect/scriptName), effect/scriptName, effect/gamepadConfig
+//   scriptParams/<script name>/<param>   values the user set (missing = the script's default)
+//   app/keepInBackground  closing the window keeps the program running
+//   ui/...                editor texts, window size
+
+QVariantMap Backend::savedParams(const QString& script) const
+{
+    QVariantMap m;
+    if (!persist_ || script.isEmpty())
+        return m;
+    QSettings st;
+    st.beginGroup("scriptParams/" + script);
+    for (const QString& k : st.childKeys())
+        m.insert(k, st.value(k).toDouble());
+    return m;
+}
+
+void Backend::saveParams(const QString& script, const QVariantMap& values)
+{
+    if (!persist_ || script.isEmpty())
+        return;
+    QSettings st;
+    st.remove("scriptParams/" + script);
+    st.beginGroup("scriptParams/" + script);
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        st.setValue(it.key(), it.value().toDouble());
+}
+
+QVariant Backend::uiValue(const QString& key, const QVariant& def) const
+{
+    return persist_ ? QSettings().value("ui/" + key, def) : def;
+}
+
+void Backend::setUiValue(const QString& key, const QVariant& value)
+{
+    if (persist_)
+        QSettings().setValue("ui/" + key, value);
+}
+
+void Backend::setRunningEffect(const QString& kind)
+{
+    QSettings st;
+    st.setValue("effect/running", kind);
+    st.sync();   // survives a crash or a killed session
+}
+
+// Called on every connect (start, the Connect button, the reconnect after a report-rate change): starts the effect
+// that was running when the program was closed.
+void Backend::restoreEffect()
+{
+    if (!persist_ || scriptRunning_ || gamepadRunning_)
+        return;
+    QSettings st;
+    const QString kind = st.value("effect/running").toString();
+    if (kind == "script") {
+        const QString name = st.value("effect/scriptName").toString();
+        QString source = st.value("effect/scriptSource").toString();
+        if (source.isEmpty())
+            source = exampleSource(name);
+        if (source.isEmpty())
+            return;
+        runningScript_ = name;
+        emit doScriptRun(source, name, savedParams(name));
+    } else if (kind == "gamepad") {
+        const QString config = st.value("effect/gamepadConfig").toString();
+        if (!config.isEmpty())
+            emit doGamepadStart(config);
+    }
+}
+
+bool Backend::keepInBackground() const
+{
+    return !persist_ || QSettings().value("app/keepInBackground", true).toBool();
+}
+
+void Backend::setKeepInBackground(bool on)
+{
+    if (!persist_)
+        return;
+    QSettings().setValue("app/keepInBackground", on);
+    emit appSettingsChanged();
+}
+
+// Start at login: Linux — an XDG autostart entry; Windows — the HKCU Run key. Both start the program hidden.
+namespace {
+QString executablePath()
+{
+    const QString appImage = qEnvironmentVariable("APPIMAGE");   // set by the AppImage runtime
+    return appImage.isEmpty() ? QCoreApplication::applicationFilePath() : appImage;
+}
+#if defined(Q_OS_LINUX)
+QString autostartFile()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/autostart/mchose-gui.desktop";
+}
+#elif defined(Q_OS_WIN)
+const char* const kRunKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+const char* const kRunValue = "MCHOSE configurator";
+#endif
+}  // namespace
+
+bool Backend::startAtLoginSupported() const
+{
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool Backend::startAtLogin() const
+{
+#if defined(Q_OS_LINUX)
+    return QFile::exists(autostartFile());
+#elif defined(Q_OS_WIN)
+    return QSettings(kRunKey, QSettings::NativeFormat).contains(kRunValue);
+#else
+    return false;
+#endif
+}
+
+void Backend::setStartAtLogin(bool on)
+{
+    if (!persist_)
+        return;
+#if defined(Q_OS_LINUX)
+    const QString file = autostartFile();
+    if (on) {
+        // Desktop Entry quoting: the path in double quotes, with " ` $ \ escaped.
+        QString path = executablePath();
+        for (const char* c : {"\\", "\"", "`", "$"})
+            path.replace(QLatin1String(c), QLatin1String("\\") + QLatin1String(c));
+        QDir().mkpath(QFileInfo(file).absolutePath());
+        QSaveFile f(file);
+        if (f.open(QIODevice::WriteOnly)) {
+            f.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=MCHOSE configurator\n"
+                                   "Comment=Starts the MCHOSE configurator in the background (restores the lighting effect)\n"
+                                   "Exec=\"%1\" --hidden\nIcon=mchose-gui\nTerminal=false\nX-GNOME-Autostart-enabled=true\n")
+                        .arg(path).toUtf8());
+            if (!f.commit())
+                emit message(tr("Cannot write %1").arg(file), true);
+        } else {
+            emit message(tr("Cannot write %1").arg(file), true);
+        }
+    } else {
+        QFile::remove(file);
+    }
+#elif defined(Q_OS_WIN)
+    QSettings run(kRunKey, QSettings::NativeFormat);
+    if (on)
+        run.setValue(kRunValue, "\"" + QDir::toNativeSeparators(executablePath()) + "\" --hidden");
+    else
+        run.remove(kRunValue);
+#else
+    Q_UNUSED(on);
+#endif
+    emit appSettingsChanged();
+}
 
 // ---------------------------------------------------------------- gamepad
 
@@ -521,8 +712,21 @@ QString Backend::gamepadSetCurve(const QString& text, const QString& name, doubl
     return lines.join(u'\n') + u'\n';
 }
 
-void Backend::startGamepad(const QString& text) { emit doGamepadStart(text); }
-void Backend::stopGamepad() { emit doGamepadStop(); }
+void Backend::startGamepad(const QString& text)
+{
+    if (persist_) {
+        QSettings().setValue("effect/gamepadConfig", text);
+        setRunningEffect("gamepad");
+    }
+    emit doGamepadStart(text);
+}
+
+void Backend::stopGamepad()
+{
+    if (persist_ && QSettings().value("effect/running").toString() == "gamepad")
+        setRunningEffect({});
+    emit doGamepadStop();
+}
 
 void Backend::gamepadKeysTyping(const QString& text, bool typing)
 {

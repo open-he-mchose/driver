@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Qt 6 / Qt Quick GUI. GPL-3.0 (Qt open-source edition, linked dynamically); core/hid stay MIT.
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2)
 qt_standard_project_setup(REQUIRES 6.5)
 if(QT_KNOWN_POLICY_QTP0004)
   qt_policy(SET QTP0004 NEW)
@@ -33,6 +33,7 @@ qt_add_qml_module(mchose-gui
     qml/GamepadPanel.qml
     qml/LightingPanel.qml
     qml/DevicePanel.qml
+    qml/Tray.qml
 )
 
 file(GLOB MCHOSE_GUI_EXAMPLES_ABS ${PROJECT_SOURCE_DIR}/script/examples/*.lua)
@@ -41,7 +42,14 @@ qt_add_resources(mchose-gui "lua_examples"
   BASE ${PROJECT_SOURCE_DIR}/script/examples
   FILES ${MCHOSE_GUI_EXAMPLES_ABS})
 target_link_libraries(mchose-gui PRIVATE mchose::core mchose::hid mchose::script mchose::gamepad
-  Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+  Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_package(Qt6 REQUIRED COMPONENTS DBus)
+  target_link_libraries(mchose-gui PRIVATE Qt6::DBus)   # is there a tray (StatusNotifierWatcher)?
+endif()
+if(WIN32)
+  target_link_libraries(mchose-gui PRIVATE user32)   # AllowSetForegroundWindow (single instance)
+endif()
 target_compile_definitions(mchose-gui PRIVATE MCHOSE_VERSION="${PROJECT_VERSION}")
 
 # Translations (Qt Linguist): gui/i18n/*.ts compiled into the binary; the language follows the system

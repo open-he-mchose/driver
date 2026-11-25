@@ -10,21 +10,37 @@ Pane {
     objectName: "scriptPanel"
     property string scriptName: "effect.lua"
     property var paramValues: ({})   // values set by the user, applied on Run
+    property string exampleText: ""   // the unchanged example of that name (not saved, so updates reach it)
 
+    // Parameter values are saved per script name and come back when that script is loaded again.
     function setSource(text, name) {
+        panel.exampleText = backend.exampleSource(name)
         editor.text = text
         panel.scriptName = name
-        panel.paramValues = ({})
+        panel.paramValues = backend.savedParams(name)
+        backend.setUiValue("scriptName", name)
         if (!backend.scriptRunning)
-            backend.previewParams(text)
+            backend.previewParams(text, panel.paramValues)
     }
     function loadExample(name) { setSource(backend.exampleSource(name), name) }
     function setParam(name, value) {
         panel.paramValues[name] = value
         if (backend.scriptRunning)
-            backend.setScriptParam(name, value)
+            backend.setScriptParam(name, value)   // saved under the running script's name
+        else
+            backend.saveParams(panel.scriptName, panel.paramValues)
     }
-    Component.onCompleted: if (backend.scriptExamples.length > 0) loadExample(backend.scriptExamples[0])
+    Component.onCompleted: {
+        // The editor as it was left (the running effect itself is started again by the backend on connect).
+        const saved = backend.uiValue("scriptSource", "")
+        const name = backend.uiValue("scriptName", "")
+        if (saved.length)
+            setSource(saved, name || "effect.lua")
+        else if (backend.scriptExamples.indexOf(name) >= 0)
+            loadExample(name)
+        else if (backend.scriptExamples.length > 0)
+            loadExample(backend.scriptExamples[0])
+    }
 
     Connections {
         target: backend
@@ -85,6 +101,7 @@ Pane {
                     wrapMode: TextEdit.NoWrap
                     tabStopDistance: 4 * fontMetrics.averageCharacterWidth
                     selectByMouse: true
+                    onTextChanged: backend.setUiValue("scriptSource", text === panel.exampleText ? "" : text)
                     FontMetrics { id: fontMetrics; font: editor.font }
                 }
             }
@@ -120,6 +137,7 @@ Pane {
                             for (const p of backend.scriptParams)
                                 backend.setScriptParam(p.name, p.def)
                         panel.paramValues = ({})
+                        backend.saveParams(panel.scriptName, panel.paramValues)
                         backend.previewParams(editor.text)   // sliders back to the defaults
                     }
                 }
@@ -206,8 +224,11 @@ Pane {
         nameFilters: ["Lua scripts (*.lua)"]
         defaultSuffix: "lua"
         onAccepted: {
-            if (backend.writeTextFile(selectedFile, editor.text))
+            if (backend.writeTextFile(selectedFile, editor.text)) {
                 panel.scriptName = selectedFile.toString().split("/").pop()
+                backend.setUiValue("scriptName", panel.scriptName)
+                backend.saveParams(panel.scriptName, panel.paramValues)
+            }
         }
     }
 }

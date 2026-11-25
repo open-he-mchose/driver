@@ -5,11 +5,12 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: win
-    width: 1180
-    height: 820
+    // Shown by main.cpp (not with --hidden). Closing hides the window; the program keeps running when
+    // backend.keepInBackground is on (a second start shows it again), otherwise it quits.
+    width: backend.uiValue("windowWidth", 1180)
+    height: backend.uiValue("windowHeight", 820)
     minimumWidth: 900
     minimumHeight: 720
-    visible: true
     title: "MCHOSE configurator " + backend.version + (backend.connected ? " — " + backend.modelName : "")
 
     property string lastMessage: ""
@@ -19,6 +20,34 @@ ApplicationWindow {
     Connections {
         target: backend
         function onMessage(text, error) { win.lastMessage = text; win.lastIsError = error }
+    }
+
+    function saveSize() {
+        if (win.visibility === Window.Windowed) {
+            backend.setUiValue("windowWidth", win.width)
+            backend.setUiValue("windowHeight", win.height)
+        }
+    }
+    onClosing: {
+        saveSize()
+        if (!backend.keepInBackground) {
+            Qt.quit()
+        } else if (tray.item && tray.item.available && !backend.uiValue("trayHintShown", false)) {
+            tray.item.showMessage(qsTr("MCHOSE configurator"),
+                                  qsTr("Still running in the background. Quit from the tray icon menu or on the Device tab."))
+            backend.setUiValue("trayHintShown", true)
+        }
+    }
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() { if (win.visible) win.saveSize() }
+    }
+    Shortcut { sequences: [StandardKey.Quit]; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
+    Loader {
+        id: tray
+        active: trayAvailable
+        source: "Tray.qml"
+        onLoaded: item.window = win
     }
 
     header: ToolBar {

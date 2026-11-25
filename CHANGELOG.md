@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- GUI: **one program per user**. Starting `mchose-gui` again shows the running program's window instead of a
+  second copy; closing the window keeps it running in the background (tray icon on Windows and on Linux desktops
+  with StatusNotifierItem; can be turned off on the Device tab). `--hidden` starts without a window, `--quit`
+  stops the running program
+- GUI: **settings are kept**: the running Lua effect (or gamepad) starts again when the keyboard connects, script
+  parameters are remembered per script, the Lua editor, the gamepad mapping and the window size are restored
+- GUI: start at login (Device tab): XDG autostart entry on Linux, the HKCU Run key on Windows
+- GUI: application icon
+
 ## 0.3.0 (2026-11-25)
 
 - **Virtual gamepad**: analog keys as an Xbox 360 controller (key travel → sticks and triggers, keys → buttons),

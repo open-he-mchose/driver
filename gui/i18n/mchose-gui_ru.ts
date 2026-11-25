@@ -348,6 +348,26 @@
         <source>Lock the Menu key</source>
         <translation>Заблокировать клавишу Menu</translation>
     </message>
+    <message>
+        <source>Application</source>
+        <translation>Программа</translation>
+    </message>
+    <message>
+        <source>Keep running in the background when the window is closed</source>
+        <translation>Продолжать работу в фоне после закрытия окна</translation>
+    </message>
+    <message>
+        <source>Start at login (in the background)</source>
+        <translation>Запускать при входе в систему (в фоне)</translation>
+    </message>
+    <message>
+        <source>The running Lua effect or gamepad, its parameters and the editor texts are saved and started again when the keyboard connects. Starting the program again shows this window. While it runs, mchosectl cannot use the keyboard.</source>
+        <translation>Запущенный Lua-эффект или геймпад, их параметры и тексты редакторов сохраняются; эффект снова запускается при подключении клавиатуры. Повторный запуск программы показывает это окно. Пока программа работает, mchosectl не может обращаться к клавиатуре.</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Выйти</translation>
+    </message>
 </context>
 <context>
     <name>GamepadPanel</name>
@@ -818,6 +838,14 @@
         <source>None</source>
         <translation>Ничего</translation>
     </message>
+    <message>
+        <source>MCHOSE configurator</source>
+        <translation>Конфигуратор MCHOSE</translation>
+    </message>
+    <message>
+        <source>Still running in the background. Quit from the tray icon menu or on the Device tab.</source>
+        <translation>Программа продолжает работать в фоне. Выйти можно через меню значка в трее или на вкладке «Устройство».</translation>
+    </message>
 </context>
 <context>
     <name>ScriptPanel</name>
@@ -1062,6 +1090,37 @@
     <message>
         <source>stopped</source>
         <translation>остановлен</translation>
+    </message>
+</context>
+<context>
+    <name>Tray</name>
+    <message>
+        <source>MCHOSE configurator — Lua effect running</source>
+        <translation>Конфигуратор MCHOSE — работает Lua-эффект</translation>
+    </message>
+    <message>
+        <source>MCHOSE configurator — gamepad running</source>
+        <translation>Конфигуратор MCHOSE — работает геймпад</translation>
+    </message>
+    <message>
+        <source>MCHOSE configurator</source>
+        <translation>Конфигуратор MCHOSE</translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation>Показать</translation>
+    </message>
+    <message>
+        <source>Stop the Lua effect</source>
+        <translation>Остановить Lua-эффект</translation>
+    </message>
+    <message>
+        <source>Stop the gamepad</source>
+        <translation>Остановить геймпад</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Выйти</translation>
     </message>
 </context>
 </TS>

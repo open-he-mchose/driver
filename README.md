@@ -24,6 +24,12 @@ settings, live key depth with a depth graph, backup / restore; English and Russi
 `-DMCHOSE_BUILD_GUI=ON` (needs Qt 6.5+ with Qt Quick and Quick Controls 2; Qt LinguistTools for the translation). It uses the system look: the platform's default
 Qt Quick Controls style and the system palette, no colours of its own. `core`, `hid` and `cli` stay MIT.
 
+One program runs per user: closing the window keeps it running in the background (tray icon where the desktop has
+one: Windows, KDE, XFCE, GNOME with the AppIndicator extension), and starting it again shows the window. The running
+Lua effect or gamepad, the script parameters and the editor texts are saved and started again when the keyboard
+connects. Device tab: turn off the background mode, start at login, quit. Command line: `--hidden` (start without a
+window), `--quit` (stop the running program). While it runs, `mchosectl` cannot use the keyboard (device lock).
+
 ## Supported keyboards
 
 | Model | Status |

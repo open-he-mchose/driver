@@ -12,7 +12,7 @@ Pane {
     function setText(t) { editor.text = t }
     function recheck() { panel.check = backend.gamepadCheck(editor.text) }
     Component.onCompleted: {
-        editor.text = backend.gamepadPreset("wasd-left-stick")
+        editor.text = backend.uiValue("gamepadMapping", backend.gamepadPreset("wasd-left-stick"))
         recheck()
     }
     Connections {
@@ -113,7 +113,7 @@ Pane {
                     font.family: "monospace"
                     wrapMode: TextEdit.NoWrap
                     selectByMouse: true
-                    onTextChanged: panel.recheck()
+                    onTextChanged: { panel.recheck(); backend.setUiValue("gamepadMapping", text) }
                 }
             }
             Label {

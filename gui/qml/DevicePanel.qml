@@ -133,6 +133,26 @@ Pane {
                     enabled: panel.canWrite
                     onClicked: backend.setSettings(winLock.checked, altTab.checked, altF4.checked, menu.checked, mac.checked)
                 }
+
+                Label { text: qsTr("Application"); font.bold: true; Layout.topMargin: 6 }
+                CheckBox {
+                    text: qsTr("Keep running in the background when the window is closed")
+                    checked: backend.keepInBackground
+                    onToggled: backend.keepInBackground = checked
+                }
+                CheckBox {
+                    visible: backend.startAtLoginSupported
+                    text: qsTr("Start at login (in the background)")
+                    checked: backend.startAtLogin
+                    onToggled: backend.startAtLogin = checked
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    opacity: 0.7
+                    text: qsTr("The running Lua effect or gamepad, its parameters and the editor texts are saved and started again when the keyboard connects. Starting the program again shows this window. While it runs, mchosectl cannot use the keyboard.")
+                }
+                Button { text: qsTr("Quit"); onClicked: Qt.quit() }
             }
         }
     }
